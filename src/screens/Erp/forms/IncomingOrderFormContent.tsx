@@ -76,35 +76,30 @@ interface FormData {
   // Step 1
   farmerName: string;
   farmerId: string;
+  farmerAccount: string;
   quantities: BagQuantities;
+  bagLocations: { [key: string]: string };
 
   // Step 2
-  mainLocation: string;
   remarks: string;
 
   // Additional fields for API
   voucherNumber: number;
-  dateOfSubmission: string;
+  dateOfEntry: string;
   variety: string;
 }
 
 interface CreateOrderPayload {
-  coldStorageId: string;
-  farmerId: string;
+  farmerAccount: string;
+  variety: string;
   voucherNumber: number;
-  dateOfSubmission: string;
-  remarks: string;
-  orderDetails: {
-    variety: string;
-    bagSizes: {
-      size: string;
-      quantity: {
-        initialQuantity: number;
-        currentQuantity: number;
-      };
-    }[];
+  incomingBagSizes: {
+    size: string;
+    quantity: number;
     location: string;
   }[];
+  dateOfEntry: string;
+  remarks: string;
 }
 
 interface ApiError extends Error {
@@ -138,11 +133,12 @@ const IncomingOrderFormContent = () => {
   const [formData, setFormData] = useState<FormData>({
     farmerName: farmer?.name || "",
     farmerId: farmer?._id || "",
+    farmerAccount: "",
     quantities: {},
-    mainLocation: "",
+    bagLocations: {},
     remarks: "",
     voucherNumber: 0,
-    dateOfSubmission: new Date().toISOString().split('T')[0],
+    dateOfEntry: new Date().toISOString().split('T')[0],
     variety: ""
   });
 
@@ -220,6 +216,10 @@ const IncomingOrderFormContent = () => {
       toast.error(t('incomingOrder.errors.selectVariety'));
       return;
     }
+    if (!selectedFarmerAccount) {
+      toast.error(t('incomingOrder.errors.noFarmerAccount'));
+      return;
+    }
     if (calculateTotal() === 0) {
       toast.error(t('incomingOrder.errors.enterQuantity'));
       return;
@@ -245,11 +245,12 @@ const IncomingOrderFormContent = () => {
       setFormData({
         farmerName: "",
         farmerId: "",
+        farmerAccount: "",
         quantities: {},
-        mainLocation: "",
+        bagLocations: {},
         remarks: "",
         voucherNumber: 0,
-        dateOfSubmission: new Date().toISOString().split('T')[0],
+        dateOfEntry: new Date().toISOString().split('T')[0],
         variety: ""
       });
       setCurrentStep(1);
@@ -273,34 +274,54 @@ const IncomingOrderFormContent = () => {
     e.preventDefault();
 
     // Validate step 2
-    if (!formData.mainLocation.trim()) {
-      toast.error(t('incomingOrder.errors.enterLocation'));
+    if (!formData.farmerAccount.trim()) {
+      toast.error(t('incomingOrder.errors.selectFarmerAccount'));
       return;
     }
 
-    // Use the receipt number from our query
-    const voucherNumber = receiptData?.receiptNumber || 1;
+    // Validate that all bag locations are filled
+    const hasEmptyLocations = adminInfo?.preferences?.bagSizes?.some(bagSize => {
+      const fieldName = getBagSizeFieldName(bagSize);
+      const quantity = parseInt(formData.quantities[fieldName] || "0");
+      const location = formData.bagLocations[fieldName] || "";
+      return quantity > 0 && !location.trim();
+    });
 
-    // Prepare order data according to API structure
+    if (hasEmptyLocations) {
+      toast.error(t('incomingOrder.errors.enterAllLocations'));
+      return;
+    }
+
+    // Use the receipt number from our query and increment by 1
+    const voucherNumber = (receiptData?.receiptNumber || 0) + 1;
+
+    // Prepare order data according to new API structure
+    const incomingBagSizes = adminInfo?.preferences?.bagSizes
+      ?.map(bagSize => {
+        const fieldName = getBagSizeFieldName(bagSize);
+        const quantity = parseInt(formData.quantities[fieldName] || "0");
+        const location = formData.bagLocations[fieldName] || "";
+
+        return {
+          size: bagSize,
+          quantity: quantity,
+          location: location
+        };
+      })
+      .filter(bagSize => bagSize.quantity > 0) || [];
+
+    if (incomingBagSizes.length === 0) {
+      toast.error(t('incomingOrder.errors.enterQuantity'));
+      return;
+    }
+
     const orderData: CreateOrderPayload = {
-      coldStorageId: adminInfo?._id || "",
-      farmerId: formData.farmerId || "temp-farmer-id",
+      farmerAccount: formData.farmerAccount,
+      variety: formData.variety,
       voucherNumber: voucherNumber,
-      dateOfSubmission: formData.dateOfSubmission,
-      remarks: formData.remarks,
-      orderDetails: [
-        {
-          variety: formData.variety,
-          bagSizes: adminInfo?.preferences?.bagSizes?.map(bagSize => ({
-            size: bagSize,
-            quantity: {
-              initialQuantity: parseInt(formData.quantities[getBagSizeFieldName(bagSize)] || "0"),
-              currentQuantity: parseInt(formData.quantities[getBagSizeFieldName(bagSize)] || "0")
-            }
-          })).filter(bagSize => bagSize.quantity.initialQuantity > 0) || [],
-          location: formData.mainLocation
-        }
-      ]
+      incomingBagSizes: incomingBagSizes,
+      dateOfEntry: formData.dateOfEntry,
+      remarks: formData.remarks
     };
 
     createOrderMutation.mutate(orderData);
@@ -373,12 +394,12 @@ const IncomingOrderFormContent = () => {
 
   // Query for receipt number
   const { data: receiptData, isLoading: isLoadingReceipt } = useQuery({
-    queryKey: ['receiptNumber', 'incoming'],
-    queryFn: () => storeAdminApi.getReceiptNumber('incoming', adminInfo?.token || ''),
+    queryKey: ['kapoorVoucherNumber'],
+    queryFn: () => storeAdminApi.getKapoorVoucherNumber(adminInfo?.token || ''),
     enabled: !!adminInfo?.token,
   });
 
-  // Query for farmer accounts to get varieties
+  // Query for farmer accounts to get varieties and accounts
   const { data: farmerAccountsData } = useQuery({
     queryKey: ['farmerAccounts', formData.farmerId],
     queryFn: () => storeAdminApi.getFarmerAccounts(formData.farmerId, adminInfo?.token || ''),
@@ -387,6 +408,19 @@ const IncomingOrderFormContent = () => {
 
   // Extract varieties from farmer accounts
   const farmerVarieties = farmerAccountsData?.data?.map(account => account.variety) || [];
+
+  // Get the selected farmer account based on variety
+  const selectedFarmerAccount = farmerAccountsData?.data?.find(account => account.variety === formData.variety);
+
+  // Update farmerAccount when variety changes
+  useEffect(() => {
+    if (selectedFarmerAccount) {
+      setFormData(prev => ({
+        ...prev,
+        farmerAccount: selectedFarmerAccount._id
+      }));
+    }
+  }, [selectedFarmerAccount]);
 
   return (
     <div className="max-w-2xl mx-auto p-6 bg-background rounded-lg shadow-lg border border-border">
@@ -399,7 +433,7 @@ const IncomingOrderFormContent = () => {
           {isLoadingReceipt ? (
             <div className="h-4 w-10 animate-pulse bg-primary/20 rounded"></div>
           ) : (
-            <span className="text-sm font-bold text-primary">#{receiptData?.receiptNumber || '-'}</span>
+            <span className="text-sm font-bold text-primary">#{(receiptData?.receiptNumber || 0) + 1}</span>
           )}
         </div>
       </div>
@@ -554,7 +588,26 @@ const IncomingOrderFormContent = () => {
                 onValueChange={(value) => updateFormData('variety', value)}
                 token={adminInfo?.token || ''}
                 customVarieties={farmerVarieties}
+                farmerAccounts={farmerAccountsData?.data || []}
               />
+
+              {/* Selected Variety Info */}
+              {formData.variety && selectedFarmerAccount && (
+                <div className="border border-blue-200 rounded-lg p-3 bg-blue-50/50">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-sm font-medium text-blue-700">
+                        Selected Variety: {formData.variety}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-sm text-blue-600">
+                        Acc No: {selectedFarmerAccount.farmerId}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Quantities Section */}
               <div className={cn(
@@ -621,7 +674,7 @@ const IncomingOrderFormContent = () => {
           )}
         </AnimatedFormStep>
 
-        {/* Step 2: Location and Remarks */}
+        {/* Step 2: Bag Locations and Remarks */}
         <AnimatedFormStep isVisible={currentStep === 2}>
           {currentStep === 2 && (
             <div className="space-y-6">
@@ -630,17 +683,38 @@ const IncomingOrderFormContent = () => {
                 <p className="text-sm text-muted-foreground mb-4">{t('incomingOrder.location.description')}</p>
 
                 <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-2">{t('incomingOrder.location.mainLabel')}</label>
-                    <input
-                      type="text"
-                      value={formData.mainLocation}
-                      onChange={(e) => updateFormData('mainLocation', e.target.value)}
-                      placeholder={t('incomingOrder.location.placeholder')}
-                      className="w-full p-3 border border-border rounded-md bg-background focus:ring-2 focus:ring-primary focus:border-primary transition"
-                      required
-                    />
-                  </div>
+                  {/* Bag Locations */}
+                  {adminInfo?.preferences?.bagSizes?.map((bagSize) => {
+                    const fieldName = getBagSizeFieldName(bagSize);
+                    const quantity = parseInt(formData.quantities[fieldName] || "0");
+
+                    // Only show location input if quantity > 0
+                    if (quantity === 0) return null;
+
+                    return (
+                      <div key={bagSize}>
+                        <label className="block text-sm font-medium mb-2">
+                          {formatBagSizeLabel(bagSize)} - {t('incomingOrder.location.label')}
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.bagLocations[fieldName] || ""}
+                          onChange={(e) => {
+                            setFormData(prev => ({
+                              ...prev,
+                              bagLocations: {
+                                ...prev.bagLocations,
+                                [fieldName]: e.target.value
+                              }
+                            }));
+                          }}
+                          placeholder={t('incomingOrder.location.placeholder')}
+                          className="w-full p-3 border border-border rounded-md bg-background focus:ring-2 focus:ring-primary focus:border-primary transition"
+                          required
+                        />
+                      </div>
+                    );
+                  })}
 
                   <div>
                     <label className="block text-sm font-medium mb-2">{t('incomingOrder.remarks.label')}</label>

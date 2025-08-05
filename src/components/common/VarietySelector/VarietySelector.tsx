@@ -5,14 +5,30 @@ import { useState, useEffect, useCallback } from "react";
 import { storeAdminApi } from "@/lib/api/storeAdmin";
 import debounce from "lodash/debounce";
 
+interface FarmerAccount {
+  _id: string;
+  profile: string;
+  storeAdmin: string;
+  variety: string;
+  farmerId: string;
+  password: string;
+  isVerified: boolean;
+  role: string;
+  farmerOrders: unknown[];
+  createdAt: string;
+  updatedAt: string;
+  __v: number;
+}
+
 interface VarietySelectorProps {
   value: string;
   onValueChange: (value: string) => void;
   token: string;
   customVarieties?: string[];
+  farmerAccounts?: FarmerAccount[];
 }
 
-const VarietySelector = ({ value, onValueChange, token, customVarieties }: VarietySelectorProps) => {
+const VarietySelector = ({ value, onValueChange, token, customVarieties, farmerAccounts }: VarietySelectorProps) => {
   const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState(value);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -31,24 +47,39 @@ const VarietySelector = ({ value, onValueChange, token, customVarieties }: Varie
   // Create a debounced search function
   const debouncedSearch = useCallback(
     debounce((query: string) => {
-      const filtered = availableVarieties.filter((variety: string) =>
-        variety.toLowerCase().includes(query.toLowerCase())
-      );
-      setFilteredVarieties(filtered);
+      if (farmerAccounts && farmerAccounts.length > 0) {
+        // Filter farmer accounts by variety name
+        const filtered = farmerAccounts.filter((account) =>
+          account.variety.toLowerCase().includes(query.toLowerCase())
+        );
+        setFilteredVarieties(filtered.map(account => account.variety));
+      } else {
+        // Fallback to original filtering for varieties without farmer accounts
+        const filtered = availableVarieties.filter((variety: string) =>
+          variety.toLowerCase().includes(query.toLowerCase())
+        );
+        setFilteredVarieties(filtered);
+      }
     }, 300),
-    [availableVarieties]
+    [availableVarieties, farmerAccounts]
   );
 
   // Update filtered varieties when data changes or search query changes
   useEffect(() => {
-    if (availableVarieties.length > 0) {
+    if (farmerAccounts && farmerAccounts.length > 0) {
+      if (searchQuery.trim() === '') {
+        setFilteredVarieties(farmerAccounts.map(account => account.variety));
+      } else {
+        debouncedSearch(searchQuery);
+      }
+    } else if (availableVarieties.length > 0) {
       if (searchQuery.trim() === '') {
         setFilteredVarieties(availableVarieties);
       } else {
         debouncedSearch(searchQuery);
       }
     }
-  }, [searchQuery, availableVarieties, debouncedSearch]);
+  }, [searchQuery, availableVarieties, farmerAccounts, debouncedSearch]);
 
   // Update search query when value changes externally
   useEffect(() => {
@@ -142,16 +173,26 @@ const VarietySelector = ({ value, onValueChange, token, customVarieties }: Varie
             ) : (
               <div className="py-1">
                 {filteredVarieties.length > 0 ? (
-                  filteredVarieties.map((variety: string) => (
-                    <button
-                      key={variety}
-                      type="button"
-                      className="w-full text-left px-4 py-2 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none transition-colors"
-                      onClick={() => handleSelectVariety(variety)}
-                    >
-                      <div className="font-medium">{variety}</div>
-                    </button>
-                  ))
+                  filteredVarieties.map((variety: string) => {
+                    // Find the farmer account for this variety
+                    const farmerAccount = farmerAccounts?.find(account => account.variety === variety);
+
+                    return (
+                      <button
+                        key={variety}
+                        type="button"
+                        className="w-full text-left px-4 py-2 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none transition-colors"
+                        onClick={() => handleSelectVariety(variety)}
+                      >
+                        <div className="font-medium">{variety}</div>
+                        {farmerAccount && (
+                          <div className="text-sm text-gray-500">
+                            Acc No: {farmerAccount.farmerId}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })
                 ) : (
                   <div className="px-4 py-2 text-sm text-gray-500">
                     {t('incomingOrder.variety.noResults')}

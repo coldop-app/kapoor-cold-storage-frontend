@@ -1,7 +1,12 @@
 import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { RootState } from '@/store';
-import { Order, StoreAdmin, OrderDetails, BagSize } from '@/utils/types';
+import { Order, StoreAdmin, BagSize, IncomingOrderNew } from '@/utils/types';
+
+// Extended BagSize interface with location
+interface BagSizeWithLocation extends BagSize {
+  location?: string;
+}
 import { ChevronDown, ChevronUp, Pencil, Share2 } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { Printer } from 'lucide-react';
@@ -35,7 +40,7 @@ declare global {
 }
 
 interface ReceiptVoucherCardProps {
-  order: Order;
+  order: Order | IncomingOrderNew;
 }
 
 const ReceiptVoucherCard = ({ order }: ReceiptVoucherCardProps) => {
@@ -43,6 +48,77 @@ const ReceiptVoucherCard = ({ order }: ReceiptVoucherCardProps) => {
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false); // Loading state for PDF generation
   const adminInfo = useSelector((state: RootState) => state.auth.adminInfo) as StoreAdmin | null;
   const navigate = useNavigate();
+
+  // Helper function to check if order is new format
+  const isNewOrderFormat = (order: Order | IncomingOrderNew): order is IncomingOrderNew => {
+    return 'farmerAccount' in order;
+  };
+
+  // Helper function to get farmer info
+  const getFarmerInfo = (order: Order | IncomingOrderNew) => {
+    if (isNewOrderFormat(order)) {
+      return {
+        name: order.farmerAccount.profile.name,
+        farmerId: order.farmerAccount.farmerId,
+        address: order.farmerAccount.profile.address,
+        mobileNumber: '' // Not available in new format
+      };
+    } else {
+      return {
+        name: order.farmerId.name,
+        farmerId: order.farmerId.farmerId,
+        address: order.farmerId.address,
+        mobileNumber: order.farmerId.mobileNumber
+      };
+    }
+  };
+
+  // Helper function to get variety
+  const getVariety = (order: Order | IncomingOrderNew) => {
+    if (isNewOrderFormat(order)) {
+      return order.variety;
+    } else {
+      return order.orderDetails[0]?.variety || '';
+    }
+  };
+
+  // Helper function to get date
+  const getDate = (order: Order | IncomingOrderNew) => {
+    if (isNewOrderFormat(order)) {
+      return order.dateOfEntry;
+    } else {
+      return order.dateOfSubmission || '';
+    }
+  };
+
+  // Helper function to get current stock
+  const getCurrentStock = (order: Order | IncomingOrderNew) => {
+    if (isNewOrderFormat(order)) {
+      // Calculate from incoming bag sizes
+      return order.incomingBagSizes.reduce((sum, bag) => sum + bag.quantity, 0);
+    } else {
+      return order.currentStockAtThatTime;
+    }
+  };
+
+  // Helper function to get bag sizes with location
+  const getBagSizesWithLocation = (order: Order | IncomingOrderNew): BagSizeWithLocation[] => {
+    if (isNewOrderFormat(order)) {
+      return order.incomingBagSizes.map(bag => ({
+        size: bag.size,
+        quantity: {
+          initialQuantity: bag.quantity,
+          currentQuantity: bag.quantity // In new format, current = initial
+        },
+        location: bag.location
+      }));
+    } else {
+      return order.orderDetails[0]?.bagSizes.map(bag => ({
+        ...bag,
+        location: order.orderDetails[0]?.location || ''
+      })) || [];
+    }
+  };
 
   // Sort bag sizes according to admin preferences using useMemo
   const sortBagSizes = useMemo(() => {
@@ -85,17 +161,14 @@ const ReceiptVoucherCard = ({ order }: ReceiptVoucherCardProps) => {
     };
   }, [adminInfo?.preferences?.bagSizes]); // Only recompute when preferences change
 
-  // Pre-sort all bag sizes for each order detail
-  const sortedOrderDetails = useMemo(() => {
-    return order.orderDetails.map(detail => ({
-      ...detail,
-      sortedBagSizes: sortBagSizes(detail.bagSizes)
-    }));
-  }, [order.orderDetails, sortBagSizes]);
+  // Pre-sort all bag sizes with location
+  const sortedBagSizesWithLocation = useMemo(() => {
+    return sortBagSizes(getBagSizesWithLocation(order));
+  }, [order, sortBagSizes]);
 
   // Calculate total initial quantity for Lot No
-  const calculateLotNo = (orderDetails: OrderDetails[]) => {
-    return orderDetails[0]?.bagSizes.reduce((sum: number, bagSize: BagSize) =>
+  const calculateLotNo = () => {
+    return getBagSizesWithLocation(order).reduce((sum: number, bagSize: BagSizeWithLocation) =>
       sum + (bagSize.quantity?.initialQuantity || 0), 0
     );
   };
@@ -109,21 +182,25 @@ const ReceiptVoucherCard = ({ order }: ReceiptVoucherCardProps) => {
     return window.ReactNativeWebView !== undefined;
   };
 
-  const shareCard = (order: Order) => {
+  const shareCard = (order: Order | IncomingOrderNew) => {
+    const farmerInfo = getFarmerInfo(order);
+    const variety = getVariety(order);
+    const date = getDate(order);
+    const currentStock = getCurrentStock(order);
+    const lotNo = calculateLotNo();
+
     // Create a formatted message string with order details
     const orderSummary = `Receipt Voucher: ${order.voucher.voucherNumber}
-Date: ${order.dateOfSubmission}
-Party: ${order.farmerId.name} (${order.farmerId.farmerId})
-Variety: ${order.orderDetails[0]?.variety || 'N/A'}
-Lot No: ${calculateLotNo(order.orderDetails)}
-Current Stock: ${order.currentStockAtThatTime}
+Date: ${date}
+Party: ${farmerInfo.name} (${farmerInfo.farmerId})
+Variety: ${variety}
+Lot No: ${lotNo}
+Current Stock: ${currentStock}
 ${order.remarks ? `Remarks: ${order.remarks}` : ''}
 
 Stock Details:
-${order.orderDetails.map(detail =>
-  detail.bagSizes.map(bag =>
-    `${bag.size}: ${bag.quantity?.currentQuantity || 0}/${bag.quantity?.initialQuantity || 0}`
-  ).join('\n')
+${sortedBagSizesWithLocation.map(bag =>
+  `${bag.size}: ${bag.quantity?.currentQuantity || 0}/${bag.quantity?.initialQuantity || 0} (${(bag as BagSizeWithLocation).location || 'N/A'})`
 ).join('\n')}`;
 
     const message: WebViewMessage = {
@@ -135,12 +212,49 @@ ${order.orderDetails.map(detail =>
     window.ReactNativeWebView?.postMessage(JSON.stringify(message));
   };
 
+  // Helper function to convert new format to old format for compatibility
+  const convertToOldFormat = (order: Order | IncomingOrderNew): Order => {
+    if (isNewOrderFormat(order)) {
+      const farmerInfo = getFarmerInfo(order);
+      return {
+        _id: order._id,
+        coldStorageId: order.coldStorageId,
+        farmerId: {
+          _id: order.farmerAccount._id,
+          name: farmerInfo.name,
+          address: farmerInfo.address,
+          mobileNumber: farmerInfo.mobileNumber,
+          farmerId: farmerInfo.farmerId
+        },
+        voucher: {
+          type: order.voucher.type as 'RECEIPT' | 'DELIVERY',
+          voucherNumber: order.voucher.voucherNumber
+        },
+        dateOfSubmission: order.dateOfEntry,
+        fulfilled: false,
+        remarks: order.remarks,
+        currentStockAtThatTime: getCurrentStock(order),
+        orderDetails: [{
+          variety: order.variety,
+          bagSizes: getBagSizesWithLocation(order).map(bag => ({
+            size: bag.size,
+            quantity: bag.quantity
+          })),
+          location: order.incomingBagSizes[0]?.location || ''
+        }],
+        createdAt: order.createdAt,
+        updatedAt: order.createdAt,
+        __v: 0
+      };
+    }
+    return order;
+  };
+
   const handleEdit = () => {
     // Check if any bag size has different initial and current quantities
-    const hasOutgoingOrders = order.orderDetails.some(detail =>
-      detail.bagSizes.some(bagSize =>
-        (bagSize.quantity?.initialQuantity || 0) !== (bagSize.quantity?.currentQuantity || 0)
-      )
+    const bagSizes = getBagSizesWithLocation(order);
+    const hasOutgoingOrders = bagSizes.some(bagSize =>
+      (bagSize.quantity?.initialQuantity || 0) !== (bagSize.quantity?.currentQuantity || 0)
     );
 
     if (hasOutgoingOrders) {
@@ -148,7 +262,7 @@ ${order.orderDetails.map(detail =>
       return;
     }
 
-    navigate('/erp/incoming-order/edit', { state: { order } });
+    navigate('/erp/incoming-order/edit', { state: { order: convertToOldFormat(order) } });
   };
 
   const handlePrint = async () => {
@@ -160,11 +274,11 @@ ${order.orderDetails.map(detail =>
     if (isWebView()) {
       // Set loading state for WebView
       setIsGeneratingPDF(true);
-      
+
       try {
         console.log('Starting PDF generation for Receipt Voucher...');
 
-        const pdfDoc = <OrderVoucherPDF order={order} adminInfo={adminInfo} />;
+        const pdfDoc = <OrderVoucherPDF order={convertToOldFormat(order)} adminInfo={adminInfo} />;
 
         // Generate PDF as blob
         const pdfBlob = await pdf(pdfDoc).toBlob();
@@ -174,9 +288,9 @@ ${order.orderDetails.map(detail =>
         const reader = new FileReader();
         reader.onload = function() {
           const base64Data = (reader.result as string).split(',')[1]; // Remove data:application/pdf;base64, prefix
-          
+
           const fileName = `Receipt_Voucher_${order.voucher.voucherNumber}_${new Date().toISOString().split('T')[0]}.pdf`;
-          
+
           const message: WebViewPDFMessage = {
             type: 'OPEN_PDF_NATIVE',
             title: `Receipt Voucher ${order.voucher.voucherNumber}`,
@@ -186,7 +300,7 @@ ${order.orderDetails.map(detail =>
 
           window.ReactNativeWebView?.postMessage(JSON.stringify(message));
           console.log('PDF data sent to React Native');
-          
+
           // Reset loading state after successful send
           setIsGeneratingPDF(false);
         };
@@ -226,17 +340,17 @@ ${order.orderDetails.map(detail =>
         if (root) {
           ReactDOM.createRoot(root).render(
             <PDFViewer width="100%" height="100%">
-              <OrderVoucherPDF order={order} adminInfo={adminInfo} />
+              <OrderVoucherPDF order={convertToOldFormat(order)} adminInfo={adminInfo} />
             </PDFViewer>
           );
         }
       }
     }
 
-    /* 
+    /*
     // COMMENTED OUT: Old print data structure for React Native
     // This was replaced with PDF generation for native viewing
-    
+
     const printData = {
       type: 'PRINT_RECEIPT',
       voucherType: 'RECEIPT',
@@ -296,10 +410,10 @@ ${order.orderDetails.map(detail =>
           </div>
           <div className="flex items-center gap-2">
             <div className="text-xs text-gray-600 bg-gray-50 px-2 py-1 rounded-md">
-              Date: <span className="font-medium text-gray-900">{order.dateOfSubmission || 'N/A'}</span>
+              Date: <span className="font-medium text-gray-900">{getDate(order) || 'N/A'}</span>
             </div>
             <div className="text-xs text-gray-600 bg-gray-50 px-2 py-1 rounded-md">
-              C.Stock: <span className="font-medium text-gray-900">{order.currentStockAtThatTime}</span>
+              C.Stock: <span className="font-medium text-gray-900">{getCurrentStock(order)}</span>
             </div>
           </div>
         </div>
@@ -312,19 +426,19 @@ ${order.orderDetails.map(detail =>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-x-3 gap-y-3">
               <div className="min-w-0">
                 <span className="text-xs text-gray-500 block">Variety</span>
-                <p className="text-sm font-medium text-gray-900 truncate">{order.orderDetails[0]?.variety}</p>
+                <p className="text-sm font-medium text-gray-900 truncate">{getVariety(order)}</p>
               </div>
               <div className="min-w-0">
                 <span className="text-xs text-gray-500 block">Lot No</span>
-                <p className="text-sm font-medium text-gray-900">{order.voucher.voucherNumber}/{order.orderDetails[0]?.bagSizes.reduce((sum, bag) => sum + (bag.quantity?.initialQuantity || 0), 0)}</p>
+                <p className="text-sm font-medium text-gray-900">{order.voucher.voucherNumber}/{calculateLotNo()}</p>
               </div>
               <div className="min-w-0">
                 <span className="text-xs text-gray-500 block">Party Name</span>
-                <p className="text-sm font-medium text-gray-900 truncate">{order.farmerId.name}</p>
+                <p className="text-sm font-medium text-gray-900 truncate">{getFarmerInfo(order).name}</p>
               </div>
               <div className="min-w-0">
                 <span className="text-xs text-gray-500 block">Acc No</span>
-                <p className="text-sm font-medium text-gray-900">{order.farmerId.farmerId}</p>
+                <p className="text-sm font-medium text-gray-900">{getFarmerInfo(order).farmerId}</p>
               </div>
             </div>
           </div>
@@ -399,99 +513,116 @@ ${order.orderDetails.map(detail =>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <span className="text-xs text-gray-500 block mb-1">Address</span>
-                  <p className="text-sm font-medium text-gray-900">{order.farmerId.address || 'N/A'}</p>
+                  <p className="text-sm font-medium text-gray-900">{getFarmerInfo(order).address || 'N/A'}</p>
                 </div>
                 <div>
                   <span className="text-xs text-gray-500 block mb-1">Mobile Number</span>
-                  <p className="text-sm font-medium text-gray-900">{order.farmerId.mobileNumber || 'N/A'}</p>
+                  <p className="text-sm font-medium text-gray-900">{getFarmerInfo(order).mobileNumber || 'N/A'}</p>
                 </div>
               </div>
             </div>
 
             {/* Stock Details */}
-            {sortedOrderDetails.map((detail, index) => (
-              <div key={index} className="space-y-4">
-                {/* Mobile View - Stacked Layout */}
-                <div className="block sm:hidden space-y-3">
-                  {detail.sortedBagSizes.map((bagSize, idx) => {
-                    const current = bagSize.quantity?.currentQuantity || 0;
-                    const initial = bagSize.quantity?.initialQuantity || 0;
-                    const bagName = bagSize.size;
+            <div className="space-y-4">
+              {/* Mobile View - Stacked Layout */}
+              <div className="block sm:hidden space-y-3">
+                {sortedBagSizesWithLocation.map((bagSize, idx) => {
+                  const current = bagSize.quantity?.currentQuantity || 0;
+                  const initial = bagSize.quantity?.initialQuantity || 0;
+                  const bagName = bagSize.size;
+                  const location = (bagSize as BagSizeWithLocation).location || 'N/A';
 
-                    return (
-                      <div key={idx} className="bg-gray-50 rounded-lg p-3">
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm font-medium text-gray-900">{bagName}</span>
-                          <span className="text-sm font-medium text-gray-900">{current}/{initial}</span>
-                        </div>
+                  return (
+                    <div key={idx} className="bg-gray-50 rounded-lg p-3">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm font-medium text-gray-900">{bagName}</span>
+                        <span className="text-sm font-medium text-gray-900">{current}/{initial}</span>
                       </div>
-                    );
-                  })}
-
-                  {/* Total Row for Mobile */}
-                  <div className="bg-primary/5 rounded-lg p-3 border border-primary/10">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-semibold text-gray-900">Total</span>
-                      <span className="text-sm font-semibold text-primary">
-                        {detail.sortedBagSizes.reduce((sum, bag) => sum + (bag.quantity?.currentQuantity || 0), 0)}/
-                        {detail.sortedBagSizes.reduce((sum, bag) => sum + (bag.quantity?.initialQuantity || 0), 0)}
-                      </span>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-gray-500">Location:</span>
+                        <span className="text-xs font-medium text-gray-700">{location}</span>
+                      </div>
                     </div>
-                  </div>
-                </div>
+                  );
+                })}
 
-                {/* Desktop View - Table Layout */}
-                <div className="hidden sm:block">
-                  <div className="overflow-x-auto">
-                    <div className="min-w-full">
-                      <table className="w-full text-sm border-collapse">
-                        <thead>
-                          <tr className="bg-gray-50">
-                            {detail.sortedBagSizes.map((bagSize, idx) => (
-                              <th key={idx} className="text-center py-3 px-3 font-medium text-gray-900 border-b border-gray-200" style={{ width: `${100 / (detail.sortedBagSizes.length + 1)}%` }}>
-                                {formatBagSizeName(bagSize.size)}
-                              </th>
-                            ))}
-                            <th className="text-center py-3 px-3 font-medium text-gray-900 border-b border-gray-200" style={{ width: `${100 / (detail.sortedBagSizes.length + 1)}%` }}>
-                              Total
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr className="border-b border-gray-100">
-                            {detail.sortedBagSizes.map((bagSize, idx) => (
-                              <td key={idx} className="py-3 px-3 text-center">
-                                {(() => {
-                                  const qty = bagSize.quantity;
-                                  return qty && qty.initialQuantity ? (
-                                    <span className="font-medium text-gray-900">
-                                      {qty.currentQuantity || 0}/{qty.initialQuantity}
-                                    </span>
-                                  ) : '-';
-                                })()}
-                              </td>
-                            ))}
-                            {/* Total */}
-                            <td className="py-3 px-3 text-center">
-                              <span className="font-semibold text-primary">
-                                {detail.sortedBagSizes.reduce((sum, bag) => sum + (bag.quantity?.currentQuantity || 0), 0)}/
-                                {detail.sortedBagSizes.reduce((sum, bag) => sum + (bag.quantity?.initialQuantity || 0), 0)}
-                              </span>
-                            </td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
+                {/* Total Row for Mobile */}
+                <div className="bg-primary/5 rounded-lg p-3 border border-primary/10">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-semibold text-gray-900">Total</span>
+                    <span className="text-sm font-semibold text-primary">
+                      {sortedBagSizesWithLocation.reduce((sum, bag) => sum + (bag.quantity?.currentQuantity || 0), 0)}/
+                      {sortedBagSizesWithLocation.reduce((sum, bag) => sum + (bag.quantity?.initialQuantity || 0), 0)}
+                    </span>
                   </div>
-                </div>
-
-                {/* Location */}
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between bg-gray-50 rounded-lg p-3 gap-2">
-                  <span className="text-sm text-gray-600 font-medium">Location:</span>
-                  <span className="text-sm font-medium text-gray-900">{detail.location}</span>
                 </div>
               </div>
-            ))}
+
+              {/* Desktop View - Table Layout */}
+              <div className="hidden sm:block">
+                <div className="overflow-x-auto">
+                  <div className="min-w-full">
+                    <table className="w-full text-sm border-collapse">
+                      <thead>
+                        <tr className="bg-gray-50">
+                          <th className="text-center py-3 px-3 font-medium text-gray-900 border-b border-gray-200">
+                            Bag Size
+                          </th>
+                          <th className="text-center py-3 px-3 font-medium text-gray-900 border-b border-gray-200">
+                            Quantity
+                          </th>
+                          <th className="text-center py-3 px-3 font-medium text-gray-900 border-b border-gray-200">
+                            Location
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sortedBagSizesWithLocation.map((bagSize, idx) => {
+                          const qty = bagSize.quantity;
+                          const location = (bagSize as BagSizeWithLocation).location || 'N/A';
+                          return (
+                            <tr key={idx} className="border-b border-gray-100">
+                              <td className="py-3 px-3 text-center">
+                                <span className="font-medium text-gray-900">
+                                  {formatBagSizeName(bagSize.size)}
+                                </span>
+                              </td>
+                              <td className="py-3 px-3 text-center">
+                                {qty && qty.initialQuantity ? (
+                                  <span className="font-medium text-gray-900">
+                                    {qty.currentQuantity || 0}/{qty.initialQuantity}
+                                  </span>
+                                ) : '-'}
+                              </td>
+                              <td className="py-3 px-3 text-center">
+                                <span className="text-sm text-gray-700">{location}</span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {/* Total Row */}
+                        <tr className="bg-primary/5 border-b border-primary/10">
+                          <td className="py-3 px-3 text-center">
+                            <span className="font-semibold text-gray-900">Total</span>
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <span className="font-semibold text-primary">
+                              {sortedBagSizesWithLocation.reduce((sum, bag) => sum + (bag.quantity?.currentQuantity || 0), 0)}/
+                              {sortedBagSizesWithLocation.reduce((sum, bag) => sum + (bag.quantity?.initialQuantity || 0), 0)}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <span className="text-sm text-gray-500">-</span>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+
+            </div>
 
             {/* Remarks Section */}
             {order.remarks && (

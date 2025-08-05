@@ -1,5 +1,6 @@
 import axios from "axios";
 import { BASE_URL } from "@/utils/const";
+import { IncomingOrdersResponse } from "@/utils/types";
 
 interface LoginCredentials {
   mobileNumber: string;
@@ -52,22 +53,16 @@ interface SearchByVarietyParams {
 }
 
 interface CreateOrderPayload {
-  coldStorageId: string;
-  farmerId: string;
+  farmerAccount: string;
+  variety: string;
   voucherNumber: number;
-  dateOfSubmission: string;
-  remarks: string;
-  orderDetails: {
-    variety: string;
-    bagSizes: {
-      size: string;
-      quantity: {
-        initialQuantity: number;
-        currentQuantity: number;
-      };
-    }[];
+  incomingBagSizes: {
+    size: string;
+    quantity: number;
     location: string;
   }[];
+  dateOfEntry: string;
+  remarks: string;
 }
 
 interface BagUpdate {
@@ -293,7 +288,7 @@ export const storeAdminApi = {
 
   getDaybookOrders: async (params: DaybookOrdersParams, token: string) => {
     const response = await axios.get(
-      `${BASE_URL}/api/store-admin/daybook/orders`,
+      `${BASE_URL}/api/store-admin/kapoor/incoming-orders`,
       {
         params,
         headers: {
@@ -301,7 +296,7 @@ export const storeAdminApi = {
         }
       }
     );
-    return response.data;
+    return response.data as IncomingOrdersResponse;
   },
 
   searchReceipt: async (params: SearchReceiptParams, token: string) => {
@@ -370,7 +365,7 @@ export const storeAdminApi = {
 
   createIncomingOrder: async (payload: CreateOrderPayload, token: string) => {
     const response = await axios.post(
-      `${BASE_URL}/api/store-admin/orders`,
+      `${BASE_URL}/api/store-admin/kapoor/incoming-orders`,
       payload,
       {
         headers: {
@@ -602,6 +597,19 @@ export const storeAdminApi = {
       `${BASE_URL}/api/store-admin/receipt-number`,
       {
         params: { type },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    return response.data;
+  },
+
+  getKapoorVoucherNumber: async (token: string) => {
+    const response = await axios.get<ReceiptNumberResponse>(
+      `${BASE_URL}/api/store-admin/kapoor/receipt-voucher-numbers`,
+      {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'

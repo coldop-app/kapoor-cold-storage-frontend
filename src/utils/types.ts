@@ -140,3 +140,53 @@ export interface OutgoingOrder {
   updatedAt: string;
   __v: number;
 }
+
+// New interfaces for the updated API response
+export interface FarmerProfile {
+  _id: string;
+  name: string;
+  address: string;
+}
+
+export interface FarmerAccount {
+  _id: string;
+  profile: FarmerProfile;
+  variety: string;
+  farmerId: string;
+}
+
+export interface IncomingBagSizeNew {
+  size: string;
+  quantity: number;
+  location: string;
+}
+
+export interface IncomingOrderNew {
+  _id: string;
+  coldStorageId: string;
+  farmerAccount: FarmerAccount;
+  variety: string;
+  incomingBagSizes: IncomingBagSizeNew[];
+  dateOfEntry: string;
+  remarks: string;
+  voucher: {
+    type: string;
+    voucherNumber: number;
+  };
+  createdAt: string;
+}
+
+export interface IncomingOrdersResponse {
+  status: string;
+  data: IncomingOrderNew[];
+  pagination: {
+    currentPage: number;
+    totalPages: number;
+    totalItems: number;
+    itemsPerPage: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+    nextPage: number | null;
+    previousPage: number | null;
+  };
+}
