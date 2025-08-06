@@ -1,39 +1,18 @@
-import { useLocation, useParams, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { useSelector } from 'react-redux';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import TopBar from '@/components/common/Topbar/Topbar';
+import { Phone, MapPin, Package, ArrowDownCircle, ArrowUpCircle, FileText } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { useSelector } from 'react-redux';
+import { useQuery } from '@tanstack/react-query';
 import { RootState } from '@/store';
 import { storeAdminApi } from '@/lib/api/storeAdmin';
-import TopBar from '@/components/common/Topbar/Topbar';
-import { Phone, MapPin, Package, Boxes, ArrowDownCircle, ArrowUpCircle, FileText } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Button } from '@/components/ui/button';
-import { useState, useMemo } from 'react';
-import DeliveryVoucherCard from '@/components/vouchers/DeliveryVoucherCard';
 import ReceiptVoucherCard from '@/components/vouchers/ReceiptVoucherCard';
-import { Order, StoreAdmin } from '@/utils/types';
-import { pdf, PDFDownloadLink } from '@react-pdf/renderer';
-import FarmerReportPDF from '@/components/pdf/FarmerReportPDF';
-
-// Add WebView interfaces
-interface WebViewPDFMessage {
-  type: 'OPEN_PDF_NATIVE';
-  title: string;
-  fileName: string;
-  pdfData: string; // base64 encoded PDF
-}
-
-interface ReactNativeWebViewType {
-  postMessage(message: string): void;
-}
-
-declare global {
-  interface Window {
-    ReactNativeWebView?: ReactNativeWebViewType;
-  }
-}
+import type { KapoorSingleFarmerIncomingOrdersResponse } from '@/lib/api/storeAdmin';
+import { useMemo } from 'react';
+import { StoreAdmin } from '@/utils/types';
 
 interface Farmer {
   _id: string;
@@ -45,24 +24,6 @@ interface Farmer {
   imageUrl?: string;
 }
 
-interface StockSummary {
-  variety: string;
-  sizes: {
-    size: string;
-    initialQuantity: number;
-    currentQuantity: number;
-  }[];
-}
-
-interface StockSummaryResponse {
-  status: string;
-  stockSummary: StockSummary[];
-}
-
-// Add new type definitions for filters
-type OrderType = 'all' | 'incoming' | 'outgoing';
-type SortOrder = 'latest' | 'oldest';
-
 const getInitials = (name: string) => {
   return name
     .split(' ')
@@ -72,277 +33,210 @@ const getInitials = (name: string) => {
     .slice(0, 2);
 };
 
-const calculateVarietyTotal = (variety: StockSummary, allBagSizes: string[]) => {
-  return allBagSizes.reduce((acc, sizeName) => {
-    const sizeData = variety.sizes.find(s => s.size === sizeName);
-    return acc + (sizeData ? sizeData.currentQuantity : 0);
-  }, 0);
-};
+// Local type for FarmerAccount as returned by getFarmerAccounts
+interface FarmerAccountAPI {
+  _id: string;
+  profile: string;
+  storeAdmin: string;
+  variety: string;
+  farmerId: string;
+  password: string;
+  isVerified: boolean;
+  role: string;
+  farmerOrders: unknown[];
+  createdAt: string;
+  updatedAt: string;
+  __v: number;
+}
 
-const calculateFarmerTotalBags = (stockSummary: StockSummary[], allBagSizes: string[]) => {
-  return stockSummary.reduce((total, variety) => {
-    return total + calculateVarietyTotal(variety, allBagSizes);
-  }, 0);
-};
+// Summary table component for farmer orders
+interface OrderSummary {
+  variety: string;
+  sizes: {
+    size: string;
+    totalQuantity: number;
+  }[];
+  totalBags: number;
+}
 
-const FarmerProfileScreen = () => {
-  const { t } = useTranslation();
-  const location = useLocation();
-  const { id } = useParams();
-  const navigate = useNavigate();
-  const farmer = location.state?.farmer as Farmer;
-  console.log(farmer)
+const FarmerOrderSummaryTable = ({ orders }: { orders: KapoorSingleFarmerIncomingOrdersResponse['data'] }) => {
   const adminInfo = useSelector((state: RootState) => state.auth.adminInfo) as StoreAdmin | null;
-  const [showOrders, setShowOrders] = useState(true); // Set to true by default
-  const [showPDFDownload, setShowPDFDownload] = useState(false);
-  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false); // Loading state for PDF generation
 
-  // Add new state for filters
-  const [orderType, setOrderType] = useState<OrderType>('all');
-  const [sortBy, setSortBy] = useState<SortOrder>('latest');
+  // Process orders to create summary
+  const summary = useMemo(() => {
+    const varietyMap = new Map<string, Map<string, number>>();
 
-  // Add WebView detection function
-  const isWebView = () => {
-    return window.ReactNativeWebView !== undefined;
-  };
+    orders.forEach(order => {
+      const variety = order.variety;
+      if (!varietyMap.has(variety)) {
+        varietyMap.set(variety, new Map());
+      }
 
-  const { data: stockData, isLoading: isStockLoading } = useQuery({
-    queryKey: ['farmerStock', id, adminInfo?.token],
-    queryFn: () => storeAdminApi.getFarmerStockSummary(id || '', adminInfo?.token || ''),
-    enabled: !!id && !!adminInfo?.token,
-  });
-
-  const { data: ordersData, isLoading: isOrdersLoading } = useQuery({
-    queryKey: ['farmerOrders', id, adminInfo?.token, orderType, sortBy],
-    queryFn: () => storeAdminApi.getFarmerOrders(id || '', adminInfo?.token || ''),
-    enabled: !!id && !!adminInfo?.token,
-  });
-
-  // Filter orders based on type
-  const filteredOrders = useMemo(() => {
-    if (!ordersData?.data) return [];
-
-    let orders = [...ordersData.data];
-
-    // Filter by type
-    if (orderType === 'incoming') {
-      orders = orders.filter(order => order.voucher.type === 'RECEIPT');
-    } else if (orderType === 'outgoing') {
-      orders = orders.filter(order => order.voucher.type === 'DELIVERY');
-    }
-
-    // Sort orders
-    orders.sort((a, b) => {
-      const dateA = new Date(a.createdAt).getTime();
-      const dateB = new Date(b.createdAt).getTime();
-      return sortBy === 'latest' ? dateB - dateA : dateA - dateB;
+      const sizeMap = varietyMap.get(variety)!;
+      order.incomingBagSizes.forEach(bag => {
+        const currentTotal = sizeMap.get(bag.size) || 0;
+        sizeMap.set(bag.size, currentTotal + bag.quantity);
+      });
     });
 
-    return orders;
-  }, [ordersData?.data, orderType, sortBy]);
+    const summaryData: OrderSummary[] = [];
+    varietyMap.forEach((sizeMap, variety) => {
+      const sizes = Array.from(sizeMap.entries()).map(([size, totalQuantity]) => ({
+        size,
+        totalQuantity
+      }));
 
-  const stockSummary = (stockData as StockSummaryResponse)?.stockSummary || [];
+      const totalBags = sizes.reduce((sum, size) => sum + size.totalQuantity, 0);
 
-  // Sort bag sizes according to admin preferences using useMemo
-  const sortBagSizes = useMemo(() => {
-    if (!adminInfo?.preferences?.bagSizes) {
-      return (bagSizes: StockSummary['sizes']) => bagSizes;
-    }
-
-    // Create a map of normalized bag size names to their index in admin preferences
-    const preferenceOrder = new Map(
-      adminInfo.preferences.bagSizes.map((size, index) => [
-        size.toLowerCase().replace(/[-\s]/g, ''), // Normalize by removing hyphens and spaces
-        index
-      ])
-    );
-
-    // Return a sorting function
-    return (bagSizes: StockSummary['sizes']) => {
-      if (!bagSizes.length) return bagSizes;
-
-      return [...bagSizes].sort((a, b) => {
-        // Normalize the bag size names for comparison
-        const aNormalized = a.size.toLowerCase().replace(/[-\s]/g, '');
-        const bNormalized = b.size.toLowerCase().replace(/[-\s]/g, '');
-
-        const aIndex = preferenceOrder.get(aNormalized);
-        const bIndex = preferenceOrder.get(bNormalized);
-
-        // If both sizes are in preferences, sort by their order
-        if (aIndex !== undefined && bIndex !== undefined) {
-          return aIndex - bIndex;
-        }
-
-        // If only one size is in preferences, put it first
-        if (aIndex !== undefined) return -1;
-        if (bIndex !== undefined) return 1;
-
-        // If neither size is in preferences, maintain original order
-        return 0;
+      summaryData.push({
+        variety,
+        sizes,
+        totalBags
       });
-    };
-  }, [adminInfo?.preferences?.bagSizes]); // Only recompute when preferences change
+    });
 
-  // Sort the stock summary data according to admin preferences
-  const sortedStockSummary = useMemo(() => {
-    return stockSummary.map(variety => ({
-      ...variety,
-      sizes: sortBagSizes(variety.sizes)
-    }));
-  }, [stockSummary, sortBagSizes]);
+    return summaryData.sort((a, b) => a.variety.localeCompare(b.variety));
+  }, [orders]);
 
-  // Get all bag sizes from admin preferences for consistent table columns
+  // Get all unique bag sizes for consistent columns
   const allBagSizes = useMemo(() => {
     if (!adminInfo?.preferences?.bagSizes || adminInfo.preferences.bagSizes.length === 0) {
-      // Fallback: use all unique bag sizes from the stock data
       const uniqueSizes = new Set<string>();
-      stockSummary.forEach(variety => {
+      summary.forEach(variety => {
         variety.sizes.forEach(size => uniqueSizes.add(size.size));
       });
       return Array.from(uniqueSizes).sort();
     }
     return adminInfo.preferences.bagSizes;
-  }, [adminInfo?.preferences?.bagSizes, stockSummary]);
+  }, [summary, adminInfo?.preferences?.bagSizes]);
 
   // Helper function to get quantity for a specific bag size and variety
-  const getQuantityForSize = (variety: StockSummary, sizeName: string) => {
+  const getQuantityForSize = (variety: OrderSummary, sizeName: string) => {
     const sizeData = variety.sizes.find(s => s.size === sizeName);
-    return sizeData ? sizeData.currentQuantity : 0;
+    return sizeData ? sizeData.totalQuantity : 0;
   };
 
   // Helper function to calculate total for a specific bag size across all varieties
   const getTotalForSize = (sizeName: string) => {
-    return sortedStockSummary.reduce((total, variety) => {
+    return summary.reduce((total, variety) => {
       return total + getQuantityForSize(variety, sizeName);
     }, 0);
   };
 
-  const totalBags = calculateFarmerTotalBags(sortedStockSummary, allBagSizes);
+  const totalBags = summary.reduce((total, variety) => total + variety.totalBags, 0);
 
-          const handleGenerateReport = async () => {
-  if (!adminInfo || !farmer) {
-    alert('Please ensure farmer and admin data is available');
-    return;
+  if (summary.length === 0) {
+    return null;
   }
 
-  if (!ordersData?.data) {
-    alert('Orders data is still loading. Please try again in a moment.');
-    return;
-  }
+  return (
+    <Card className="bg-white shadow-sm">
+      <CardContent className="p-0">
+        <div className="overflow-x-auto">
+          <div className="min-w-full inline-block align-middle">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b">
+                <tr>
+                  <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-gray-900 border-r whitespace-nowrap">
+                    Varieties
+                  </th>
+                  {allBagSizes.map((size: string) => (
+                    <th key={size} className="px-2 sm:px-3 lg:px-4 py-3 sm:py-4 text-center text-xs sm:text-sm font-semibold text-gray-900 border-r whitespace-nowrap">
+                      {size}
+                    </th>
+                  ))}
+                  <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 text-center text-xs sm:text-sm font-semibold text-gray-900 bg-blue-50 whitespace-nowrap">
+                    Total
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {summary.map((variety, index) => (
+                  <tr key={variety.variety} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
+                    <td className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 font-medium text-gray-900 border-r text-xs sm:text-sm">
+                      <div className="truncate max-w-[120px] sm:max-w-none" title={variety.variety}>
+                        {variety.variety}
+                      </div>
+                    </td>
+                    {allBagSizes.map((size: string) => (
+                      <td
+                        key={size}
+                        className="px-2 sm:px-3 lg:px-4 py-3 sm:py-4 text-center text-gray-700 border-r text-xs sm:text-sm"
+                      >
+                        {getQuantityForSize(variety, size)}
+                      </td>
+                    ))}
+                    <td className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 text-center font-bold text-blue-600 bg-blue-50 text-xs sm:text-sm">
+                      {variety.totalBags}
+                    </td>
+                  </tr>
+                ))}
+                {/* Totals Row */}
+                <tr className="bg-gray-100 font-bold">
+                  <td className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 text-gray-900 border-r text-xs sm:text-sm">
+                    Bag Total
+                  </td>
+                  {allBagSizes.map((size: string) => (
+                    <td key={size} className="px-2 sm:px-3 lg:px-4 py-3 sm:py-4 text-center text-gray-900 border-r text-xs sm:text-sm">
+                      {getTotalForSize(size)}
+                    </td>
+                  ))}
+                  <td className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 text-center text-blue-600 bg-blue-100 text-xs sm:text-sm">
+                    {totalBags}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
 
-  // Set loading state for WebView
-  if (isWebView()) {
-    setIsGeneratingPDF(true);
-  }
+const FarmerProfileScreen = () => {
+  const { t } = useTranslation();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const farmer = location.state?.farmer as Farmer;
+  const adminInfo = useSelector((state: RootState) => state.auth.adminInfo);
 
-  try {
-    console.log('Starting PDF generation...');
+  const {
+    data: accountsData,
+    isLoading: isAccountsLoading,
+    error: accountsError,
+  } = useQuery({
+    queryKey: ['farmerAccounts', farmer?._id, adminInfo?.token],
+    queryFn: () =>
+      farmer && adminInfo?.token
+        ? storeAdminApi.getFarmerAccounts(farmer._id, adminInfo.token)
+        : Promise.resolve({ status: '', data: [] }),
+    enabled: !!farmer && !!adminInfo?.token,
+  });
 
-    const pdfDoc = <FarmerReportPDF
-      farmer={farmer}
-      adminInfo={adminInfo}
-      orders={ordersData.data}
-    />;
+  // Orders fetching logic
+  const accountIds = (accountsData?.data ?? []).map((account: FarmerAccountAPI) => account._id);
 
-    console.log('PDF component created, generating blob...');
+  const {
+    data: ordersData,
+    isLoading: isOrdersLoading,
+    error: ordersError,
+  } = useQuery({
+    queryKey: ['farmerIncomingOrders', accountIds, adminInfo?.token],
+    queryFn: () =>
+      accountIds.length > 0 && adminInfo?.token
+        ? storeAdminApi.kapoorGetAllIncomingOrdersOfSingleFarmer(accountIds, adminInfo.token)
+        : Promise.resolve(undefined),
+    enabled: !!adminInfo?.token && accountIds.length > 0,
+  });
 
-    // Generate PDF as blob
-    const pdfBlob = await pdf(pdfDoc).toBlob();
-    console.log('PDF blob generated, size:', pdfBlob.size, 'bytes');
-
-    // Check if running in WebView
-    if (isWebView()) {
-      console.log('WebView detected, sending PDF to React Native...');
-
-      // Convert blob to base64
-      const reader = new FileReader();
-      reader.onload = function() {
-        const base64Data = (reader.result as string).split(',')[1]; // Remove data:application/pdf;base64, prefix
-        
-        const fileName = `${farmer.name.replace(/\s+/g, '_')}_Report_${new Date().toISOString().split('T')[0]}.pdf`;
-        
-        const message: WebViewPDFMessage = {
-          type: 'OPEN_PDF_NATIVE',
-          title: `${farmer.name} - Farmer Report`,
-          fileName: fileName,
-          pdfData: base64Data
-        };
-
-        window.ReactNativeWebView?.postMessage(JSON.stringify(message));
-        console.log('PDF data sent to React Native');
-        
-        // Reset loading state after successful send
-        setIsGeneratingPDF(false);
-      };
-
-      reader.onerror = function() {
-        console.error('Error converting PDF to base64');
-        alert('Error preparing PDF for native viewer. Please try again.');
-        // Reset loading state on error
-        setIsGeneratingPDF(false);
-      };
-
-      reader.readAsDataURL(pdfBlob);
-      } else {
-        // Web browser handling (existing code)
-        console.log('Web browser detected, opening PDF in new tab...');
-        
-        // Create a more reliable blob URL by ensuring proper MIME type
-        const enhancedBlob = new Blob([pdfBlob], {
-          type: 'application/pdf'
-        });
-
-        const pdfUrl = URL.createObjectURL(enhancedBlob);
-        console.log('PDF URL created:', pdfUrl);
-
-        // Create filename with farmer name and date for fallback download
-        const fileName = `${farmer.name.replace(/\s+/g, '_')}_Report_${new Date().toISOString().split('T')[0]}.pdf`;
-
-        // Open PDF in new tab for viewing (not downloading)
-        const newWindow = window.open(pdfUrl, '_blank');
-
-        if (newWindow) {
-          console.log('PDF opened in new tab successfully');
-
-          // Clean up the URL object after a delay to ensure PDF loads
-          setTimeout(() => {
-            URL.revokeObjectURL(pdfUrl);
-            console.log('PDF URL cleaned up');
-          }, 5000);
-        } else {
-          // Popup blocked - fallback to download
-          console.log('Popup blocked, creating download link...');
-          const downloadLink = document.createElement('a');
-          downloadLink.href = pdfUrl;
-          downloadLink.download = fileName;
-          downloadLink.style.display = 'none';
-
-          document.body.appendChild(downloadLink);
-          downloadLink.click();
-          document.body.removeChild(downloadLink);
-
-          alert('Popup was blocked. PDF has been downloaded instead.');
-
-          setTimeout(() => URL.revokeObjectURL(pdfUrl), 1000);
-        }
-      }
-
-      } catch (error) {
-    console.error('Error generating PDF:', error);
-
-    // For WebView, show a simple error message
-    if (isWebView()) {
-      setIsGeneratingPDF(false); // Reset loading state on error
-      alert('Failed to generate PDF. Please try again.');
-    } else {
-      // Fallback to PDFDownloadLink on error for web browsers
-      console.log('Falling back to PDFDownloadLink method...');
-      setShowPDFDownload(true);
-      alert('PDF generation failed with the primary method. Please use the "Download Report" button that will appear.');
-    }
-  }
-  };
+  // Calculate total bags from orders
+  const totalBags = useMemo(() => {
+    if (!ordersData?.data) return 0;
+    return ordersData.data.reduce((total, order) => {
+      return total + order.incomingBagSizes.reduce((sum, bag) => sum + bag.quantity, 0);
+    }, 0);
+  }, [ordersData?.data]);
 
   if (!farmer) {
     return (
@@ -404,60 +298,14 @@ const FarmerProfileScreen = () => {
                     </Button>
                   </div>
                   <Button
-                    onClick={handleGenerateReport}
                     variant="outline"
                     className="w-full sm:w-auto bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 hover:text-gray-900 shadow-sm hover:shadow-md transition-all duration-200 px-4 sm:px-6 py-2.5 font-medium"
-                    disabled={isOrdersLoading || (isWebView() && isGeneratingPDF)}
+                    disabled
                   >
-                    {isOrdersLoading ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-2"></div>
-                        <span className="hidden sm:inline">{t('farmerProfile.loading')}</span>
-                        <span className="sm:hidden">Loading</span>
-                      </>
-                    ) : (isWebView() && isGeneratingPDF) ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-2"></div>
-                        <span className="hidden sm:inline">Generating PDF...</span>
-                        <span className="sm:hidden">Generating...</span>
-                      </>
-                    ) : (
-                      <>
-                        <FileText className="mr-2 h-4 w-4 text-primary" />
-                        <span className="hidden sm:inline">{t('farmerProfile.viewReport')}</span>
-                        <span className="sm:hidden">{t('farmerProfile.report')}</span>
-                      </>
-                    )}
+                    <FileText className="mr-2 h-4 w-4 text-primary" />
+                    <span className="hidden sm:inline">{t('farmerProfile.viewReport')}</span>
+                    <span className="sm:hidden">{t('farmerProfile.report')}</span>
                   </Button>
-                  {showPDFDownload && ordersData?.data && (
-                    <PDFDownloadLink
-                      document={
-                        <FarmerReportPDF
-                          farmer={farmer}
-                          adminInfo={adminInfo!}
-                          orders={ordersData.data}
-                        />
-                      }
-                      fileName={`${farmer.name.replace(/\s+/g, '_')}_Report_${new Date().toISOString().split('T')[0]}.pdf`}
-                      className="w-full sm:w-auto inline-flex items-center justify-center px-4 sm:px-6 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 shadow-sm hover:shadow-md transition-all duration-200"
-                    >
-                      {({ loading }) => (
-                        loading ? (
-                          <span className="flex items-center">
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-500 mr-2"></div>
-                            <span className="hidden sm:inline">{t('farmerProfile.generating')}</span>
-                            <span className="sm:hidden">{t('farmerProfile.gen')}</span>
-                          </span>
-                        ) : (
-                          <span className="flex items-center">
-                            <FileText className="mr-2 h-4 w-4 text-gray-500" />
-                            <span className="hidden sm:inline">{t('farmerProfile.fallbackDownload')}</span>
-                            <span className="sm:hidden">{t('farmerProfile.download')}</span>
-                          </span>
-                        )
-                      )}
-                    </PDFDownloadLink>
-                  )}
                 </div>
               </div>
             </div>
@@ -477,9 +325,9 @@ const FarmerProfileScreen = () => {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
-                      Account Number
+                      Number of Accounts
                     </div>
-                    <div className="font-medium text-gray-900 truncate">{farmer.farmerId}</div>
+                    <div className="font-bold text-2xl text-primary">{accountsData?.data?.length || 0}</div>
                   </div>
                 </div>
               </div>
@@ -516,7 +364,7 @@ const FarmerProfileScreen = () => {
                 </div>
               </div>
 
-              {/* Total Bags Card */}
+              {/* Total Bags Card (set to 0 as placeholder) */}
               <div className="bg-gray-50/50 border border-gray-100 rounded-xl p-4 hover:shadow-sm transition-all duration-200">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-primary/10 rounded-lg">
@@ -534,170 +382,69 @@ const FarmerProfileScreen = () => {
           </CardContent>
         </Card>
 
-        {/* Stock Summary Section */}
-        <Card>
-          <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-0 px-4 sm:px-6 py-4">
-            <div className="flex items-center gap-2">
-              <Package size={20} className="text-primary" />
-              <CardTitle className="text-base sm:text-lg md:text-xl">{t('farmerProfile.stockSummary')}</CardTitle>
-            </div>
-            <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-500">
-              <Boxes size={14} className="hidden sm:block" />
-              <span>{t('farmerProfile.totalVarieties')}: {sortedStockSummary.length}</span>
-            </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            {isStockLoading ? (
-              <div className="p-4 sm:p-6 space-y-4">
-                <Skeleton className="h-20 sm:h-24 w-full" />
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="space-y-2">
-                    <Skeleton className="h-6 sm:h-8 w-1/3" />
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
-                      {[1, 2, 3, 4, 5].map((j) => (
-                        <Skeleton key={j} className="h-20 sm:h-24" />
-                      ))}
+        {/* Farmer Accounts Section */}
+        <div className="mt-8">
+          <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4">
+            Accounts
+          </h2>
+          {isAccountsLoading ? (
+            <div className="text-gray-500">Loading accounts...</div>
+          ) : accountsError ? (
+            <div className="text-red-500">Failed to load accounts.</div>
+          ) : accountsData?.data?.length === 0 ? (
+            <div className="text-gray-500">No accounts found for this farmer.</div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {(accountsData?.data ?? []).map((account: FarmerAccountAPI) => (
+                <div
+                  key={account._id}
+                  className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm hover:shadow-md transition-all duration-200"
+                >
+                  <div className="flex flex-col gap-2">
+                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                      Variety
                     </div>
+                    <div className="font-semibold text-gray-900 text-lg">{account.variety}</div>
+                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mt-3 mb-1">
+                      Farmer ID
+                    </div>
+                    <div className="font-mono text-primary text-xl">{account.farmerId}</div>
                   </div>
-                ))}
-              </div>
-            ) : sortedStockSummary.length === 0 ? (
-              <div className="text-center py-6 sm:py-8 text-sm sm:text-base text-gray-500">
-                {t('farmerProfile.noStockFound')}
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <div className="min-w-full inline-block align-middle">
-                  <table className="w-full">
-                    <thead className="bg-gray-50 border-b">
-                      <tr>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-gray-900 border-r whitespace-nowrap">
-                          Varieties
-                        </th>
-                        {allBagSizes.map(size => (
-                          <th key={size} className="px-2 sm:px-3 lg:px-4 py-3 sm:py-4 text-center text-xs sm:text-sm font-semibold text-gray-900 border-r whitespace-nowrap">
-                            {size}
-                          </th>
-                        ))}
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 text-center text-xs sm:text-sm font-semibold text-gray-900 bg-blue-50 whitespace-nowrap">
-                          Total
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                      {sortedStockSummary.map((variety, index) => (
-                        <tr key={variety.variety} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
-                          <td className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 font-medium text-gray-900 border-r text-xs sm:text-sm">
-                            <div className="truncate max-w-[120px] sm:max-w-none" title={variety.variety}>
-                              {variety.variety}
-                            </div>
-                          </td>
-                          {allBagSizes.map(size => (
-                            <td key={size} className="px-2 sm:px-3 lg:px-4 py-3 sm:py-4 text-center text-gray-700 border-r text-xs sm:text-sm">
-                              {getQuantityForSize(variety, size)}
-                            </td>
-                          ))}
-                          <td className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 text-center font-bold text-blue-600 bg-blue-50 text-xs sm:text-sm">
-                            {calculateVarietyTotal(variety, allBagSizes)}
-                          </td>
-                        </tr>
-                      ))}
-                      {/* Totals Row */}
-                      <tr className="bg-gray-100 font-bold">
-                        <td className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 text-gray-900 border-r text-xs sm:text-sm">
-                          Bag Total
-                        </td>
-                        {allBagSizes.map(size => (
-                          <td key={size} className="px-2 sm:px-3 lg:px-4 py-3 sm:py-4 text-center text-gray-900 border-r text-xs sm:text-sm">
-                            {getTotalForSize(size)}
-                          </td>
-                        ))}
-                        <td className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 text-center text-blue-600 bg-blue-100 text-xs sm:text-sm">
-                          {totalBags}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
                 </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Show/Hide Orders Button */}
-        <div className="flex justify-center">
-          <Button
-            onClick={() => setShowOrders(!showOrders)}
-            className={`w-full sm:w-auto px-4 sm:px-8 py-4 sm:py-6 text-base sm:text-lg font-semibold shadow-lg hover:shadow-xl transition-all ${
-              showOrders
-                ? 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-                : 'bg-primary hover:bg-primary/90 text-white'
-            }`}
-          >
-            {showOrders ? t('farmerProfile.hideOrdersHistory') : t('farmerProfile.showOrdersHistory')}
-          </Button>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* Orders Section */}
-        {showOrders && (
-          <div className="mt-4 sm:mt-6 space-y-4 sm:space-y-6">
-            <Card>
-              <CardHeader className="px-3 sm:px-4 md:px-6 py-3 sm:py-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <CardTitle className="text-base sm:text-lg md:text-xl flex items-center gap-2">
-                    <Package className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-primary" />
-                    {t('farmerProfile.ordersHistory')}
-                  </CardTitle>
-
-                  {/* Filters Row */}
-                  <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-                    <select
-                      value={orderType}
-                      onChange={(e) => setOrderType(e.target.value as OrderType)}
-                      className="w-full sm:w-[150px] px-3 py-2 border border-gray-200 rounded-lg bg-gray-50/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all duration-200"
-                    >
-                      <option value="all">{t('daybook.allOrders')}</option>
-                      <option value="incoming">{t('daybook.incoming')}</option>
-                      <option value="outgoing">{t('daybook.outgoing')}</option>
-                    </select>
-
-                    <select
-                      value={sortBy}
-                      onChange={(e) => setSortBy(e.target.value as SortOrder)}
-                      className="w-full sm:w-[150px] px-3 py-2 border border-gray-200 rounded-lg bg-gray-50/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all duration-200"
-                    >
-                      <option value="latest">{t('daybook.latestFirst')}</option>
-                      <option value="oldest">{t('daybook.oldestFirst')}</option>
-                    </select>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="p-2 sm:p-4 md:p-6">
-                {isOrdersLoading ? (
-                  <div className="space-y-3 sm:space-y-4">
-                    {[1, 2, 3].map((i) => (
-                      <Skeleton key={i} className="h-24 sm:h-28 md:h-32 w-full" />
-                    ))}
-                  </div>
-                ) : filteredOrders.length === 0 ? (
-                  <div className="text-center py-6 sm:py-8 text-sm sm:text-base text-gray-500">
-                    {t('farmerProfile.noOrdersFound')}
-                  </div>
-                ) : (
-                  <div className="space-y-3 sm:space-y-4">
-                    {filteredOrders.map((order: Order) => (
-                      order.voucher.type === 'DELIVERY' ? (
-                        <DeliveryVoucherCard key={order._id} order={order} />
-                      ) : (
-                        <ReceiptVoucherCard key={order._id} order={order} />
-                      )
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+        {/* Order Summary Section */}
+        {ordersData?.data && ordersData.data.length > 0 && (
+          <div className="mt-8">
+            <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4">
+              Order Summary
+            </h2>
+            <FarmerOrderSummaryTable orders={ordersData.data} />
           </div>
         )}
+
+        {/* Incoming Orders Section */}
+        <div className="mt-10">
+          <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4">
+            Incoming Orders
+          </h2>
+          {isOrdersLoading ? (
+            <div className="text-gray-500">Loading orders...</div>
+          ) : ordersError ? (
+            <div className="text-red-500">Failed to load orders.</div>
+          ) : ordersData?.data?.length === 0 ? (
+            <div className="text-gray-500">No incoming orders found for this farmer.</div>
+          ) : (
+            <div className="space-y-6">
+              {ordersData?.data?.map((order: KapoorSingleFarmerIncomingOrdersResponse['data'][number]) => (
+                <ReceiptVoucherCard key={order._id} order={order} />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </>
   );

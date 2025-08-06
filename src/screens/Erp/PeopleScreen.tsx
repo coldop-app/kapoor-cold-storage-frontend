@@ -9,21 +9,7 @@ import TopBar from '@/components/common/Topbar/Topbar';
 import { Search, ChevronDown, Plus, Users2, MapPin, Phone } from 'lucide-react';
 import NewFarmerModal, { NewFarmerFormData } from '@/components/modals/NewFarmerModal';
 import toast from 'react-hot-toast';
-
-interface Farmer {
-  _id: string;
-  name: string;
-  address: string;
-  mobileNumber: string;
-  farmerId: string;
-  createdAt: string;
-  imageUrl?: string;
-}
-
-interface ApiResponse {
-  status: string;
-  populatedFarmers: Farmer[];
-}
+import { FarmerProfile } from '@/lib/api/storeAdmin';
 
 interface ApiError extends Error {
   response?: {
@@ -56,8 +42,8 @@ const PeopleScreen = () => {
   }, [t]);
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['farmers', adminInfo?.token],
-    queryFn: () => storeAdminApi.getFarmers(adminInfo?.token || ''),
+    queryKey: ['farmerProfiles', adminInfo?.token],
+    queryFn: () => storeAdminApi.getFarmerProfiles(adminInfo?.token || ''),
   });
 
   // Create farmer mutation
@@ -97,14 +83,15 @@ const PeopleScreen = () => {
     createFarmerMutation.mutate(farmerData);
   };
 
-  const apiResponse = data as ApiResponse;
-  let farmers = apiResponse?.populatedFarmers || [];
+  // Adapt to new response
+  const apiResponse = data;
+  let farmers: FarmerProfile[] = apiResponse?.data || [];
 
   // Filter
   if (searchQuery) {
     farmers = farmers.filter(farmer =>
       farmer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      farmer.mobileNumber.includes(searchQuery) ||
+      (farmer.mobileNumber || '').includes(searchQuery) ||
       farmer.address.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }
@@ -114,7 +101,8 @@ const PeopleScreen = () => {
     if (sortBy === 'name') {
       return a.name.localeCompare(b.name);
     } else if (sortBy === 'farmerId') {
-      return parseInt(a.farmerId) - parseInt(b.farmerId);
+      // FarmerProfile does not have farmerId, so fallback to 0
+      return 0;
     } else {
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     }
@@ -273,17 +261,7 @@ const PeopleScreen = () => {
                 key={farmer._id}
                 className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 sm:p-6 cursor-pointer hover:shadow-md transition-all duration-200"
                 onClick={() => navigate(`/erp/people/${farmer._id}`, {
-                  state: {
-                    farmer: {
-                      _id: farmer._id,
-                      name: farmer.name,
-                      address: farmer.address,
-                      mobileNumber: farmer.mobileNumber,
-                      farmerId: farmer.farmerId,
-                      createdAt: farmer.createdAt,
-                      imageUrl: farmer.imageUrl
-                    }
-                  }
+                  state: { farmer }
                 })}
               >
                 <div className="flex items-start gap-4 sm:gap-6">
@@ -301,15 +279,11 @@ const PeopleScreen = () => {
                     <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">{farmer.name}</h3>
                     <div className="space-y-2">
                       <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <svg className="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <rect x="3" y="4" width="18" height="16" rx="2" />
-                          <path d="M8 8h8M8 12h8M8 16h4" />
-                        </svg>
-                        <span>Account Number: {farmer.farmerId}</span>
+                        <span>Father's Name: {farmer.fatherName}</span>
                       </div>
                       <div className="flex items-center gap-2 text-sm text-gray-600">
                         <Phone size={16} className="text-gray-400" />
-                        <span>{farmer.mobileNumber}</span>
+                        <span>{farmer.mobileNumber || '-'}</span>
                       </div>
                       <div className="flex items-center gap-2 text-sm text-gray-600">
                         <MapPin size={16} className="text-gray-400" />

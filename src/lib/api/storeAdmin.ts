@@ -194,6 +194,55 @@ interface FarmerAccountsResponse {
   data: FarmerAccount[];
 }
 
+export interface FarmerProfile {
+  _id: string;
+  name: string;
+  fatherName: string;
+  address: string;
+  imageUrl: string;
+  mobileNumber?: string;
+  createdAt: string;
+  updatedAt: string;
+  __v: number;
+}
+
+interface FarmerProfilesResponse {
+  status: string;
+  data: FarmerProfile[];
+}
+
+export interface KapoorSingleFarmerIncomingOrdersResponse {
+  status: string;
+  data: Array<{
+    voucher: {
+      type: string;
+      voucherNumber: number;
+    };
+    _id: string;
+    coldStorageId: string;
+    farmerAccount: {
+      _id: string;
+      profile: {
+        _id: string;
+        name: string;
+        address: string;
+      };
+      variety: string;
+      farmerId: string;
+    };
+    variety: string;
+    incomingBagSizes: Array<{
+      size: string;
+      quantity: number;
+      location: string;
+    }>;
+    dateOfEntry: string;
+    remarks: string;
+    createdAt: string;
+  }>;
+  count: number;
+}
+
 export const storeAdminApi = {
   login: async (credentials: LoginCredentials) => {
     const response = await axios.post(
@@ -624,6 +673,46 @@ export const storeAdminApi = {
       `${BASE_URL}/api/store-admin/kapoor/farmer-profiles/${farmerProfileId}/accounts`,
       {
         headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      }
+    );
+    return response.data;
+  },
+
+  /**
+   * Fetches all farmer profiles for the Kapoor cold storage.
+   * @param token JWT Bearer token for authentication
+   * @returns Promise<FarmerProfilesResponse>
+   */
+  getFarmerProfiles: async (token: string): Promise<FarmerProfilesResponse> => {
+    const response = await axios.get<FarmerProfilesResponse>(
+      `${BASE_URL}/api/store-admin/kapoor/farmer-profiles`,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      }
+    );
+    return response.data;
+  },
+
+  /**
+   * Fetches all incoming orders for a single farmer (Kapoor cold storage) by farmerAccountIds.
+   * @param farmerAccountIds Array of farmer account IDs
+   * @param token JWT Bearer token for authentication
+   * @returns Promise<KapoorSingleFarmerIncomingOrdersResponse>
+   */
+  kapoorGetAllIncomingOrdersOfSingleFarmer: async (
+    farmerAccountIds: string[],
+    token: string
+  ): Promise<KapoorSingleFarmerIncomingOrdersResponse> => {
+    const response = await axios.post<KapoorSingleFarmerIncomingOrdersResponse>(
+      `${BASE_URL}/api/store-admin/kapoor/incoming-orders/single-farmer`,
+      { farmerAccountIds },
+      {
+        headers: {
+          'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         }
       }
