@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 import { storeAdminApi } from "@/lib/api/storeAdmin";
 import { RootState } from "@/store";
 import { StoreAdmin } from "@/utils/types";
+import { KapoorSingleFarmerIncomingOrdersResponse } from "@/lib/api/storeAdmin";
 import {
   Select,
   SelectContent,
@@ -88,6 +89,7 @@ interface Farmer {
   name: string;
   address?: string;
   mobileNumber?: string;
+  fatherName?: string; // Added fatherName
 }
 
 interface FormData {
@@ -97,39 +99,33 @@ interface FormData {
   remarks: string;
 }
 
-interface BagSizeQuantity {
-  initialQuantity: number;
-  currentQuantity: number;
-}
-
-interface OrderBagSize {
-  size: string;
-  quantity: BagSizeQuantity;
-}
-
-interface Voucher {
-  type: string;
-  voucherNumber: number;
-}
-
-interface OrderDetail {
-  variety: string;
-  bagSizes: OrderBagSize[];
-  location: string;
-}
-
-interface IncomingOrder {
+// Add proper interface for the API response structure
+interface KapoorIncomingOrder {
   _id: string;
-  voucher: Voucher;
-  dateOfSubmission: string;
+  voucher: {
+    type: string;
+    voucherNumber: number;
+  };
+  coldStorageId: string;
+  farmerAccount: {
+    _id: string;
+    profile: {
+      _id: string;
+      name: string;
+      address: string;
+    };
+    variety: string;
+    farmerId: string;
+  };
+  variety: string;
+  incomingBagSizes: Array<{
+    size: string;
+    quantity: number;
+    location: string;
+  }>;
+  dateOfEntry: string;
   remarks: string;
-  orderDetails: OrderDetail[];
-  fulfilled: boolean;
-}
-
-interface IncomingOrdersResponse {
-  status: string;
-  data: IncomingOrder[];
+  createdAt: string;
 }
 
 interface BagSizeSelection {
@@ -216,7 +212,6 @@ const OutgoingOrderFormContent = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
-  const [availableVarieties, setAvailableVarieties] = useState<string[]>([]);
   const [selectedQuantities, setSelectedQuantities] = useState<BagSizeSelection[]>([]);
   const [inputQuantity, setInputQuantity] = useState<string>('');
   const [activeBox, setActiveBox] = useState<{
@@ -232,43 +227,43 @@ const OutgoingOrderFormContent = () => {
     remarks: ""
   });
 
-  // Fetch farmer's incoming orders
-  const { data: farmerIncomingOrders, isLoading: isLoadingIncomingOrders } = useQuery<IncomingOrdersResponse>({
-    queryKey: ['farmerIncomingOrders', formData.farmerId],
-    queryFn: () => storeAdminApi.getFarmerIncomingOrders(formData.farmerId, adminInfo?.token || ''),
-    enabled: !!formData.farmerId && !!adminInfo?.token
+  // Fetch farmer accounts for selected farmer
+  const { data: farmerAccountsData, isLoading: isLoadingFarmerAccounts } = useQuery({
+    queryKey: ['farmerAccounts', formData.farmerId],
+    queryFn: () => storeAdminApi.getFarmerAccounts(formData.farmerId, adminInfo?.token || ''),
+    enabled: !!formData.farmerId && !!adminInfo?.token,
   });
 
-  // Update available varieties when orders change
-  useEffect(() => {
-    if (farmerIncomingOrders?.data) {
-      const varieties = new Set<string>();
-      farmerIncomingOrders.data.forEach((order) => {
-        order.orderDetails.forEach((detail) => {
-          varieties.add(detail.variety);
-        });
-      });
-      setAvailableVarieties(Array.from(varieties));
-    }
-  }, [farmerIncomingOrders?.data]);
+  // Extract varieties from farmer accounts
+  const farmerVarieties = farmerAccountsData?.data?.map(account => account.variety) || [];
 
-  // Update the filteredOrders useMemo
+  // Get the selected farmer account based on variety
+  const selectedFarmerAccount = farmerAccountsData?.data?.find(account => account.variety === formData.variety);
+
+  // Fetch farmer's incoming orders using the new API
+  const { data: farmerIncomingOrders, isLoading: isLoadingIncomingOrders } = useQuery<KapoorSingleFarmerIncomingOrdersResponse>({
+    queryKey: ['farmerIncomingOrders', selectedFarmerAccount?._id],
+    queryFn: () => storeAdminApi.kapoorGetAllIncomingOrdersOfSingleFarmer([selectedFarmerAccount?._id || ''], adminInfo?.token || ''),
+    enabled: !!selectedFarmerAccount?._id && !!adminInfo?.token
+  });
+
+  // Update the filteredOrders useMemo to work with new response structure
   const filteredOrders = React.useMemo(() => {
     if (!farmerIncomingOrders?.data || !formData.variety) return [];
 
-    return farmerIncomingOrders.data.filter((order) =>
-      order.orderDetails.some(detail => detail.variety === formData.variety)
+    return farmerIncomingOrders.data.filter((order: KapoorIncomingOrder) =>
+      order.variety === formData.variety
     );
   }, [farmerIncomingOrders?.data, formData.variety]);
 
-  // Get available bag sizes from the first order's details
+  // Get available bag sizes from the orders
   const availableBagSizes = React.useMemo(() => {
     if (!filteredOrders.length) return adminInfo?.preferences?.bagSizes || [];
 
-    // Get unique bag sizes from the first order
+    // Get unique bag sizes from all orders
     const bagSizes = new Set<string>();
-    filteredOrders[0].orderDetails.forEach(detail => {
-      detail.bagSizes.forEach(bagSize => {
+    filteredOrders.forEach((order: KapoorIncomingOrder) => {
+      order.incomingBagSizes.forEach((bagSize) => {
         bagSizes.add(bagSize.size);
       });
     });
@@ -392,13 +387,11 @@ const OutgoingOrderFormContent = () => {
   // Add handleSelectAll function after handleQuantityRemove
   const handleSelectAll = () => {
     // If we have selections matching all available quantities, deselect all
-    const totalAvailableQuantities = filteredOrders.reduce((total, order) => {
-      order.orderDetails.forEach(detail => {
-        detail.bagSizes.forEach(bagSize => {
-          if (bagSize.quantity.currentQuantity > 0) {
-            total++;
-          }
-        });
+    const totalAvailableQuantities = filteredOrders.reduce((total: number, order: KapoorIncomingOrder) => {
+      order.incomingBagSizes.forEach((bagSize) => {
+        if (bagSize.quantity > 0) {
+          total++;
+        }
       });
       return total;
     }, 0);
@@ -411,18 +404,16 @@ const OutgoingOrderFormContent = () => {
 
     // Select all
     const newSelectedQuantities: BagSizeSelection[] = [];
-    filteredOrders.forEach(order => {
-      order.orderDetails.forEach(detail => {
-        detail.bagSizes.forEach(bagSize => {
-          if (bagSize.quantity.currentQuantity > 0) {
-            newSelectedQuantities.push({
-              receiptNumber: order.voucher.voucherNumber,
-              bagSize: bagSize.size,
-              selectedQuantity: bagSize.quantity.currentQuantity,
-              maxQuantity: bagSize.quantity.currentQuantity
-            });
-          }
-        });
+    filteredOrders.forEach((order: KapoorIncomingOrder) => {
+      order.incomingBagSizes.forEach((bagSize) => {
+        if (bagSize.quantity > 0) {
+          newSelectedQuantities.push({
+            receiptNumber: order.voucher.voucherNumber,
+            bagSize: bagSize.size,
+            selectedQuantity: bagSize.quantity,
+            maxQuantity: bagSize.quantity
+          });
+        }
       });
     });
 
@@ -431,13 +422,11 @@ const OutgoingOrderFormContent = () => {
 
   // Add isAllSelected computation
   const isAllSelected = useMemo(() => {
-    const totalAvailableQuantities = filteredOrders.reduce((total, order) => {
-      order.orderDetails.forEach(detail => {
-        detail.bagSizes.forEach(bagSize => {
-          if (bagSize.quantity.currentQuantity > 0) {
-            total++;
-          }
-        });
+    const totalAvailableQuantities = filteredOrders.reduce((total: number, order: KapoorIncomingOrder) => {
+      order.incomingBagSizes.forEach((bagSize) => {
+        if (bagSize.quantity > 0) {
+          total++;
+        }
       });
       return total;
     }, 0);
@@ -450,14 +439,12 @@ const OutgoingOrderFormContent = () => {
     // Check if all quantities for this voucher are already selected
     const voucherSelections = selectedQuantities.filter(sq => sq.receiptNumber === voucherNumber);
     const totalAvailableQuantitiesForVoucher = filteredOrders
-      .filter(order => order.voucher.voucherNumber === voucherNumber)
-      .reduce((total, order) => {
-        order.orderDetails.forEach(detail => {
-          detail.bagSizes.forEach(bagSize => {
-            if (bagSize.quantity.currentQuantity > 0) {
-              total++;
-            }
-          });
+      .filter((order: KapoorIncomingOrder) => order.voucher.voucherNumber === voucherNumber)
+      .reduce((total: number, order: KapoorIncomingOrder) => {
+        order.incomingBagSizes.forEach((bagSize) => {
+          if (bagSize.quantity > 0) {
+            total++;
+          }
         });
         return total;
       }, 0);
@@ -469,21 +456,19 @@ const OutgoingOrderFormContent = () => {
     }
 
     // Select all available quantities for this voucher
-    const order = filteredOrders.find(o => o.voucher.voucherNumber === voucherNumber);
+    const order = filteredOrders.find((o: KapoorIncomingOrder) => o.voucher.voucherNumber === voucherNumber);
     if (!order) return;
 
     const newSelections: BagSizeSelection[] = [];
-    order.orderDetails.forEach(detail => {
-      detail.bagSizes.forEach(bagSize => {
-        if (bagSize.quantity.currentQuantity > 0) {
-          newSelections.push({
-            receiptNumber: voucherNumber,
-            bagSize: bagSize.size,
-            selectedQuantity: bagSize.quantity.currentQuantity,
-            maxQuantity: bagSize.quantity.currentQuantity
-          });
-        }
-      });
+    order.incomingBagSizes.forEach((bagSize) => {
+      if (bagSize.quantity > 0) {
+        newSelections.push({
+          receiptNumber: voucherNumber,
+          bagSize: bagSize.size,
+          selectedQuantity: bagSize.quantity,
+          maxQuantity: bagSize.quantity
+        });
+      }
     });
 
     // Merge new selections with existing ones (excluding current voucher)
@@ -497,14 +482,12 @@ const OutgoingOrderFormContent = () => {
   const isVoucherSelected = (voucherNumber: number) => {
     const voucherSelections = selectedQuantities.filter(sq => sq.receiptNumber === voucherNumber);
     const totalAvailableQuantitiesForVoucher = filteredOrders
-      .filter(order => order.voucher.voucherNumber === voucherNumber)
-      .reduce((total, order) => {
-        order.orderDetails.forEach(detail => {
-          detail.bagSizes.forEach(bagSize => {
-            if (bagSize.quantity.currentQuantity > 0) {
-              total++;
-            }
-          });
+      .filter((order: KapoorIncomingOrder) => order.voucher.voucherNumber === voucherNumber)
+      .reduce((total: number, order: KapoorIncomingOrder) => {
+        order.incomingBagSizes.forEach((bagSize) => {
+          if (bagSize.quantity > 0) {
+            total++;
+          }
         });
         return total;
       }, 0);
@@ -677,7 +660,7 @@ const OutgoingOrderFormContent = () => {
                         required
                       />
                       {/* Search Results Dropdown */}
-                      {showDropdown && (searchResults?.length > 0 || isSearching) && (
+                      {showDropdown && (searchResults?.data?.length > 0 || isSearching) && (
                         <div
                           id="farmer-search-dropdown"
                           className="absolute left-0 right-0 top-full mt-1 max-h-60 overflow-auto z-50 bg-white rounded-md shadow-lg border border-gray-200"
@@ -688,7 +671,7 @@ const OutgoingOrderFormContent = () => {
                             </div>
                           ) : (
                             <div className="py-1">
-                              {searchResults?.map((result: Farmer) => (
+                              {searchResults?.data?.map((result: Farmer) => (
                                 <button
                                   key={result._id}
                                   type="button"
@@ -696,12 +679,11 @@ const OutgoingOrderFormContent = () => {
                                   onClick={() => handleSelectFarmer(result)}
                                 >
                                   <div className="font-medium text-sm sm:text-base">{result.name}</div>
-                                  {(result.mobileNumber || result.address) && (
-                                    <div className="text-xs sm:text-sm text-gray-500">
-                                      {result.mobileNumber && <span>📱 {result.mobileNumber}</span>}
-                                      {result.address && <span className="ml-2">📍 {result.address}</span>}
-                                    </div>
-                                  )}
+                                  <div className="text-xs sm:text-sm text-gray-500">
+                                    {result.fatherName && <span>{result.fatherName}</span>}
+                                    {result.mobileNumber && <span className="ml-2">📱 {result.mobileNumber}</span>}
+                                    {result.address && <span className="ml-2">📍 {result.address}</span>}
+                                  </div>
                                 </button>
                               ))}
                             </div>
@@ -716,7 +698,7 @@ const OutgoingOrderFormContent = () => {
                 <div className="border border-green-200 rounded-lg p-2 sm:p-3 bg-green-50/50">
                   <h3 className="text-sm sm:text-base font-medium mb-1 sm:mb-1.5">{t('outgoingOrder.variety.title')}</h3>
                   <p className="text-xs text-muted-foreground mb-2 sm:mb-3">
-                                          {availableVarieties.length > 0
+                                          {farmerVarieties.length > 0
                         ? t('outgoingOrder.variety.description')
                         : t('outgoingOrder.variety.noVarieties')}
                   </p>
@@ -725,20 +707,20 @@ const OutgoingOrderFormContent = () => {
                     <Select
                       value={formData.variety}
                       onValueChange={(value) => updateFormData('variety', value)}
-                      disabled={isLoadingIncomingOrders || availableVarieties.length === 0}
+                      disabled={isLoadingFarmerAccounts || farmerVarieties.length === 0}
                     >
                       <SelectTrigger className="w-full bg-background text-sm p-2 sm:p-2.5">
-                        {isLoadingIncomingOrders ? (
+                        {isLoadingFarmerAccounts ? (
                           <div className="flex items-center gap-2">
                             <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
                             <span>{t('outgoingOrder.variety.loading')}</span>
                           </div>
                         ) : (
-                                                      <SelectValue placeholder={t('outgoingOrder.variety.selectPlaceholder')} />
+                          <SelectValue placeholder={t('outgoingOrder.variety.selectPlaceholder')} />
                         )}
                       </SelectTrigger>
                       <SelectContent>
-                        {availableVarieties.map((variety: string) => (
+                        {farmerVarieties.map((variety: string) => (
                           <SelectItem key={variety} value={variety} className="text-sm">
                             {variety}
                           </SelectItem>
@@ -813,19 +795,14 @@ const OutgoingOrderFormContent = () => {
                                       <td className="p-2.5 border-b">
                                         <div className="flex flex-col gap-1">
                                           <div className="font-medium text-base">#{order.voucher.voucherNumber}</div>
-                                          {order.orderDetails[0]?.location && (
-                                            <div className="text-xs text-gray-500">
-                                              {t('outgoingOrder.orders.location')}: {order.orderDetails[0].location}
-                                            </div>
-                                          )}
                                         </div>
                                       </td>
                                       {availableBagSizes.map(size => {
-                                        const totalQuantities = order.orderDetails.reduce((acc, detail) => {
-                                          const bagSize = detail.bagSizes.find(b => b.size === size);
-                                          if (bagSize) {
-                                            acc.current += bagSize.quantity.currentQuantity;
-                                            acc.initial += bagSize.quantity.initialQuantity;
+                                        const bagSizeData = order.incomingBagSizes.find(bag => bag.size === size);
+                                        const totalQuantities = order.incomingBagSizes.reduce((acc: { current: number; initial: number }, bagSize) => {
+                                          if (bagSize.size === size) {
+                                            acc.current += bagSize.quantity;
+                                            acc.initial += bagSize.quantity;
                                           }
                                           return acc;
                                         }, { current: 0, initial: 0 });
@@ -837,7 +814,12 @@ const OutgoingOrderFormContent = () => {
 
                                         return (
                                           <td key={size} className="p-2 border-b text-center">
-                                            <div className="flex items-center justify-center">
+                                            <div className="flex flex-col items-center gap-1">
+                                              {bagSizeData?.location && (
+                                                <div className="text-xs text-gray-500 mb-1">
+                                                  📍 {bagSizeData.location}
+                                                </div>
+                                              )}
                                               <button
                                                 type="button"
                                                 onClick={(e) => handleBoxClick(
@@ -895,9 +877,9 @@ const OutgoingOrderFormContent = () => {
                               <div className="p-3 bg-gray-50 border-b border-gray-200">
                                 <div className="flex flex-col gap-1">
                                   <div className="font-medium">#{order.voucher.voucherNumber}</div>
-                                  {order.orderDetails[0]?.location && (
+                                  {order.incomingBagSizes[0]?.location && (
                                     <div className="text-xs text-gray-500 mt-0.5">
-                                      {t('outgoingOrder.orders.location')}: {order.orderDetails[0].location}
+                                      {t('outgoingOrder.orders.location')}: {order.incomingBagSizes[0].location}
                                     </div>
                                   )}
                                   <button
@@ -916,11 +898,11 @@ const OutgoingOrderFormContent = () => {
                               <div className="p-3">
                                 <div className="grid grid-cols-3 gap-2">
                                   {availableBagSizes.map(size => {
-                                    const totalQuantities = order.orderDetails.reduce((acc, detail) => {
-                                      const bagSize = detail.bagSizes.find(b => b.size === size);
-                                      if (bagSize) {
-                                        acc.current += bagSize.quantity.currentQuantity;
-                                        acc.initial += bagSize.quantity.initialQuantity;
+                                    const bagSizeData = order.incomingBagSizes.find(bag => bag.size === size);
+                                    const totalQuantities = order.incomingBagSizes.reduce((acc: { current: number; initial: number }, bagSize) => {
+                                      if (bagSize.size === size) {
+                                        acc.current += bagSize.quantity;
+                                        acc.initial += bagSize.quantity;
                                       }
                                       return acc;
                                     }, { current: 0, initial: 0 });
@@ -933,6 +915,11 @@ const OutgoingOrderFormContent = () => {
                                     return (
                                       <div key={size} className="flex flex-col items-center">
                                         <div className="text-xs font-medium mb-1">{size}</div>
+                                        {bagSizeData?.location && (
+                                          <div className="text-xs text-gray-500 mb-1 text-center">
+                                            📍 {bagSizeData.location}
+                                          </div>
+                                        )}
                                         <button
                                           type="button"
                                           onClick={(e) => handleBoxClick(
@@ -1050,7 +1037,7 @@ const OutgoingOrderFormContent = () => {
                       {selectedQuantities.map((sq, index) => {
                         // Find the order and its location
                         const order = filteredOrders.find(o => o.voucher.voucherNumber === sq.receiptNumber);
-                        const location = order?.orderDetails[0]?.location;
+                        const location = order?.incomingBagSizes[0]?.location;
 
                         return (
                           <div key={index} className="flex flex-col gap-1">
