@@ -10,7 +10,8 @@ import { useQuery } from '@tanstack/react-query';
 import { RootState } from '@/store';
 import { storeAdminApi } from '@/lib/api/storeAdmin';
 import ReceiptVoucherCard from '@/components/vouchers/ReceiptVoucherCard';
-import type { KapoorSingleFarmerIncomingOrdersResponse } from '@/lib/api/storeAdmin';
+import DeliveryVoucherCard from '@/components/vouchers/DeliveryVoucherCard';
+import type { KapoorSingleFarmerAllOrdersResponse } from '@/lib/api/storeAdmin';
 import { useMemo } from 'react';
 import { StoreAdmin } from '@/utils/types';
 
@@ -59,24 +60,27 @@ interface OrderSummary {
   totalBags: number;
 }
 
-const FarmerOrderSummaryTable = ({ orders }: { orders: KapoorSingleFarmerIncomingOrdersResponse['data'] }) => {
+const FarmerOrderSummaryTable = ({ orders }: { orders: KapoorSingleFarmerAllOrdersResponse['data'] }) => {
   const adminInfo = useSelector((state: RootState) => state.auth.adminInfo) as StoreAdmin | null;
 
-  // Process orders to create summary
+  // Process orders to create summary - only include incoming orders for stock summary
   const summary = useMemo(() => {
     const varietyMap = new Map<string, Map<string, number>>();
 
     orders.forEach(order => {
-      const variety = order.variety;
-      if (!varietyMap.has(variety)) {
-        varietyMap.set(variety, new Map());
-      }
+      // Only process incoming orders (RECEIPT type) for stock summary
+      if (order.voucher.type === 'RECEIPT' && order.incomingBagSizes) {
+        const variety = order.variety || '';
+        if (!varietyMap.has(variety)) {
+          varietyMap.set(variety, new Map());
+        }
 
-      const sizeMap = varietyMap.get(variety)!;
-      order.incomingBagSizes.forEach(bag => {
-        const currentTotal = sizeMap.get(bag.size) || 0;
-        sizeMap.set(bag.size, currentTotal + bag.quantity);
-      });
+        const sizeMap = varietyMap.get(variety)!;
+        order.incomingBagSizes.forEach(bag => {
+          const currentTotal = sizeMap.get(bag.size) || 0;
+          sizeMap.set(bag.size, currentTotal + bag.quantity.currentQuantity);
+        });
+      }
     });
 
     const summaryData: OrderSummary[] = [];
@@ -201,6 +205,77 @@ const FarmerProfileScreen = () => {
   const farmer = location.state?.farmer as Farmer;
   const adminInfo = useSelector((state: RootState) => state.auth.adminInfo);
 
+  // Helper function to convert new API format to IncomingOrderNew for ReceiptVoucherCard
+  const convertToIncomingOrderNew = (order: KapoorSingleFarmerAllOrdersResponse['data'][number]) => {
+    return {
+      _id: order._id,
+      coldStorageId: order.coldStorageId,
+      farmerAccount: {
+        _id: order.farmerAccount._id,
+        profile: {
+          _id: order.farmerAccount._id,
+          name: order.farmerAccount.name,
+          address: order.farmerAccount.address
+        },
+        variety: order.variety || '',
+        farmerId: order.farmerAccount.farmerId
+      },
+      variety: order.variety || '',
+      incomingBagSizes: order.incomingBagSizes || [],
+      dateOfEntry: order.dateOfEntry || '',
+      remarks: order.remarks,
+      currentStockAtThatTime: order.currentStockAtThatTime,
+      voucher: order.voucher,
+      createdAt: order.createdAt
+    };
+  };
+
+  // Helper function to convert new API format to Order for DeliveryVoucherCard
+  const convertToOrder = (order: KapoorSingleFarmerAllOrdersResponse['data'][number]) => {
+    return {
+      _id: order._id,
+      coldStorageId: order.coldStorageId,
+      farmerId: {
+        _id: order.farmerAccount._id,
+        name: order.farmerAccount.name,
+        address: order.farmerAccount.address,
+        mobileNumber: order.farmerAccount.mobileNumber,
+        farmerId: order.farmerAccount.farmerId
+      },
+      voucher: {
+        type: order.voucher.type as 'RECEIPT' | 'DELIVERY',
+        voucherNumber: order.voucher.voucherNumber
+      },
+      dateOfExtraction: order.dateOfExtraction || '',
+      remarks: order.remarks,
+      currentStockAtThatTime: order.currentStockAtThatTime,
+      orderDetails: order.orderDetails?.map(detail => ({
+        variety: detail.variety,
+        bagSizes: detail.bagSizes.map(bag => ({
+          size: bag.size,
+          quantityRemoved: bag.quantityRemoved,
+          location: bag.location
+        })),
+        incomingOrder: detail.incomingOrder ? {
+          _id: detail.incomingOrder._id,
+          location: detail.incomingOrder.incomingBagSizes[0]?.location || '',
+          voucher: {
+            type: detail.incomingOrder.voucher.type as 'RECEIPT' | 'DELIVERY',
+            voucherNumber: detail.incomingOrder.voucher.voucherNumber
+          },
+          incomingBagSizes: detail.incomingOrder.incomingBagSizes.map(bag => ({
+            size: bag.size,
+            quantity: bag.quantity,
+            _id: bag.size // Using size as _id since it's not provided
+          }))
+        } : undefined
+      })) || [],
+      createdAt: order.createdAt,
+      updatedAt: order.createdAt,
+      __v: 0
+    };
+  };
+
   const {
     data: accountsData,
     isLoading: isAccountsLoading,
@@ -214,7 +289,7 @@ const FarmerProfileScreen = () => {
     enabled: !!farmer && !!adminInfo?.token,
   });
 
-  // Orders fetching logic
+  // Orders fetching logic - using the new getAllOrders function
   const accountIds = (accountsData?.data ?? []).map((account: FarmerAccountAPI) => account._id);
 
   const {
@@ -222,20 +297,31 @@ const FarmerProfileScreen = () => {
     isLoading: isOrdersLoading,
     error: ordersError,
   } = useQuery({
-    queryKey: ['farmerIncomingOrders', accountIds, adminInfo?.token],
+    queryKey: ['farmerAllOrders', accountIds, adminInfo?.token],
     queryFn: () =>
       accountIds.length > 0 && adminInfo?.token
-        ? storeAdminApi.kapoorGetAllIncomingOrdersOfSingleFarmer(accountIds, adminInfo.token)
+        ? storeAdminApi.kapoorGetAllOrdersOfaSingleFarmer(accountIds, adminInfo.token)
         : Promise.resolve(undefined),
     enabled: !!adminInfo?.token && accountIds.length > 0,
   });
 
-  // Calculate total bags from orders
+  // Calculate total bags from incoming orders only
   const totalBags = useMemo(() => {
     if (!ordersData?.data) return 0;
-    return ordersData.data.reduce((total, order) => {
-      return total + order.incomingBagSizes.reduce((sum, bag) => sum + bag.quantity, 0);
-    }, 0);
+    return ordersData.data
+      .filter(order => order.voucher.type === 'RECEIPT' && order.incomingBagSizes)
+      .reduce((total, order) => {
+        return total + order.incomingBagSizes!.reduce((sum, bag) => sum + bag.quantity.currentQuantity, 0);
+      }, 0);
+  }, [ordersData?.data]);
+
+  // Separate incoming and outgoing orders
+  const incomingOrders = useMemo(() => {
+    return ordersData?.data?.filter(order => order.voucher.type === 'RECEIPT') || [];
+  }, [ordersData?.data]);
+
+  const outgoingOrders = useMemo(() => {
+    return ordersData?.data?.filter(order => order.voucher.type === 'DELIVERY') || [];
   }, [ordersData?.data]);
 
   if (!farmer) {
@@ -364,7 +450,7 @@ const FarmerProfileScreen = () => {
                 </div>
               </div>
 
-              {/* Total Bags Card (set to 0 as placeholder) */}
+              {/* Total Bags Card */}
               <div className="bg-gray-50/50 border border-gray-100 rounded-xl p-4 hover:shadow-sm transition-all duration-200">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-primary/10 rounded-lg">
@@ -426,22 +512,42 @@ const FarmerProfileScreen = () => {
           </div>
         )}
 
-        {/* Incoming Orders Section */}
+        {/* Orders Section */}
         <div className="mt-10">
           <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4">
-            Incoming Orders
+            All Orders ({ordersData?.counts?.incoming || 0} Incoming, {ordersData?.counts?.outgoing || 0} Outgoing)
           </h2>
           {isOrdersLoading ? (
             <div className="text-gray-500">Loading orders...</div>
           ) : ordersError ? (
             <div className="text-red-500">Failed to load orders.</div>
           ) : ordersData?.data?.length === 0 ? (
-            <div className="text-gray-500">No incoming orders found for this farmer.</div>
+            <div className="text-gray-500">No orders found for this farmer.</div>
           ) : (
             <div className="space-y-6">
-              {ordersData?.data?.map((order: KapoorSingleFarmerIncomingOrdersResponse['data'][number]) => (
-                <ReceiptVoucherCard key={order._id} order={order} />
-              ))}
+              {/* Incoming Orders */}
+              {incomingOrders.length > 0 && (
+                <div className="space-y-4">
+                  <h3 className="text-md font-medium text-gray-700 border-b border-gray-200 pb-2">
+                    Incoming Orders ({incomingOrders.length})
+                  </h3>
+                  {incomingOrders.map((order) => (
+                    <ReceiptVoucherCard key={order._id} order={convertToIncomingOrderNew(order)} />
+                  ))}
+                </div>
+              )}
+
+              {/* Outgoing Orders */}
+              {outgoingOrders.length > 0 && (
+                <div className="space-y-4">
+                  <h3 className="text-md font-medium text-gray-700 border-b border-gray-200 pb-2">
+                    Outgoing Orders ({outgoingOrders.length})
+                  </h3>
+                  {outgoingOrders.map((order) => (
+                    <DeliveryVoucherCard key={order._id} order={convertToOrder(order)} />
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
