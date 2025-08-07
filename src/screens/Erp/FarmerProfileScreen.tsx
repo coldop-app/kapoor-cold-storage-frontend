@@ -12,8 +12,11 @@ import { storeAdminApi } from '@/lib/api/storeAdmin';
 import ReceiptVoucherCard from '@/components/vouchers/ReceiptVoucherCard';
 import DeliveryVoucherCard from '@/components/vouchers/DeliveryVoucherCard';
 import type { KapoorSingleFarmerAllOrdersResponse } from '@/lib/api/storeAdmin';
-import { useMemo } from 'react';
-import { StoreAdmin } from '@/utils/types';
+import { useMemo, useState } from 'react';
+import { StoreAdmin, Order } from '@/utils/types';
+import { PDFViewer } from '@react-pdf/renderer';
+import FarmerReportPDF from '@/components/pdf/FarmerReportPDF';
+import * as ReactDOM from 'react-dom/client';
 
 interface Farmer {
   _id: string;
@@ -32,6 +35,17 @@ const getInitials = (name: string) => {
     .join('')
     .toUpperCase()
     .slice(0, 2);
+};
+
+// Type guard function to check if the admin is a StoreAdmin
+const isStoreAdmin = (admin: unknown): admin is StoreAdmin => {
+  return admin !== null &&
+    typeof admin === 'object' &&
+    'coldStorageDetails' in admin &&
+    'name' in admin &&
+    'personalAddress' in admin &&
+    'mobileNumber' in admin &&
+    'imageUrl' in admin;
 };
 
 // Local type for FarmerAccount as returned by getFarmerAccounts
@@ -204,6 +218,7 @@ const FarmerProfileScreen = () => {
   const navigate = useNavigate();
   const farmer = location.state?.farmer as Farmer;
   const adminInfo = useSelector((state: RootState) => state.auth.adminInfo);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   // Helper function to convert new API format to IncomingOrderNew for ReceiptVoucherCard
   const convertToIncomingOrderNew = (order: KapoorSingleFarmerAllOrdersResponse['data'][number]) => {
@@ -274,6 +289,166 @@ const FarmerProfileScreen = () => {
       updatedAt: order.createdAt,
       __v: 0
     };
+  };
+
+  // Helper function to convert new API format to Order for FarmerReportPDF
+  const convertToOrderForPDF = (order: KapoorSingleFarmerAllOrdersResponse['data'][number]): Order => {
+    if (order.voucher.type === 'RECEIPT') {
+      // For receipt orders, use incomingBagSizes
+      return {
+        _id: order._id,
+        coldStorageId: order.coldStorageId,
+        farmerId: {
+          _id: order.farmerAccount._id,
+          name: order.farmerAccount.name,
+          address: order.farmerAccount.address,
+          mobileNumber: order.farmerAccount.mobileNumber,
+          farmerId: order.farmerAccount.farmerId
+        },
+        voucher: {
+          type: 'RECEIPT' as const,
+          voucherNumber: order.voucher.voucherNumber
+        },
+        dateOfSubmission: order.dateOfEntry || order.createdAt,
+        remarks: order.remarks,
+        currentStockAtThatTime: order.currentStockAtThatTime,
+        orderDetails: [{
+          variety: order.variety || '',
+          location: order.incomingBagSizes?.[0]?.location || '',
+          bagSizes: order.incomingBagSizes?.map(bag => ({
+            size: bag.size,
+            quantity: {
+              initialQuantity: bag.quantity.currentQuantity,
+              currentQuantity: bag.quantity.currentQuantity
+            },
+            location: bag.location
+          })) || []
+        }],
+        createdAt: order.createdAt,
+        updatedAt: order.createdAt,
+        __v: 0
+      };
+    } else {
+      // For delivery orders, use orderDetails
+      return {
+        _id: order._id,
+        coldStorageId: order.coldStorageId,
+        farmerId: {
+          _id: order.farmerAccount._id,
+          name: order.farmerAccount.name,
+          address: order.farmerAccount.address,
+          mobileNumber: order.farmerAccount.mobileNumber,
+          farmerId: order.farmerAccount.farmerId
+        },
+        voucher: {
+          type: 'DELIVERY' as const,
+          voucherNumber: order.voucher.voucherNumber
+        },
+        dateOfExtraction: order.dateOfExtraction || order.createdAt,
+        remarks: order.remarks,
+        currentStockAtThatTime: order.currentStockAtThatTime,
+        orderDetails: order.orderDetails?.map(detail => ({
+          variety: detail.variety,
+          location: detail.bagSizes[0]?.location || '',
+          bagSizes: detail.bagSizes.map(bag => ({
+            size: bag.size,
+            quantityRemoved: bag.quantityRemoved,
+            location: bag.location
+          }))
+        })) || [],
+        createdAt: order.createdAt,
+        updatedAt: order.createdAt,
+        __v: 0
+      };
+    }
+  };
+
+  // Handle view report functionality
+  const handleViewReport = async () => {
+    if (!adminInfo || !isStoreAdmin(adminInfo) || !ordersData?.data) {
+      alert('Data not available for report generation');
+      return;
+    }
+
+    setIsGeneratingPDF(true);
+
+    try {
+      // Convert orders to the format expected by FarmerReportPDF
+      const ordersForPDF: Order[] = ordersData.data.map(convertToOrderForPDF);
+
+      // Log the data being sent to PDF
+      console.log('=== FARMER REPORT PDF DATA ===');
+      console.log('Farmer Info:', {
+        _id: farmer._id,
+        name: farmer.name,
+        address: farmer.address,
+        mobileNumber: farmer.mobileNumber,
+        farmerId: farmer.farmerId,
+        createdAt: farmer.createdAt
+      });
+
+      console.log('Admin Info:', {
+        _id: adminInfo._id,
+        name: adminInfo.name,
+        coldStorageName: adminInfo.coldStorageDetails.coldStorageName,
+        coldStorageAddress: adminInfo.coldStorageDetails.coldStorageAddress,
+        bagSizes: adminInfo.preferences?.bagSizes || []
+      });
+
+      console.log('Orders Summary:', {
+        totalOrders: ordersForPDF.length,
+        receiptOrders: ordersForPDF.filter(order => order.voucher.type === 'RECEIPT').length,
+        deliveryOrders: ordersForPDF.filter(order => order.voucher.type === 'DELIVERY').length,
+        orders: ordersForPDF.map(order => ({
+          _id: order._id,
+          voucherType: order.voucher.type,
+          voucherNumber: order.voucher.voucherNumber,
+          date: order.dateOfSubmission || order.dateOfExtraction,
+          orderDetailsCount: order.orderDetails.length,
+          totalBags: order.orderDetails.reduce((total, detail) => {
+            if (order.voucher.type === 'RECEIPT') {
+              return total + detail.bagSizes.reduce((sum, bag) => sum + (bag.quantity?.initialQuantity || 0), 0);
+            } else {
+              return total + detail.bagSizes.reduce((sum, bag) => sum + (bag.quantityRemoved || 0), 0);
+            }
+          }, 0)
+        }))
+      });
+      console.log('=== END FARMER REPORT PDF DATA ===');
+
+      // Open PDF in new window
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(`
+          <html>
+            <body>
+              <div id="root" style="height: 100vh;"></div>
+              <script>
+                window.onbeforeunload = null;
+              </script>
+            </body>
+          </html>
+        `);
+
+        const root = printWindow.document.getElementById('root');
+        if (root) {
+          ReactDOM.createRoot(root).render(
+            <PDFViewer width="100%" height="100%">
+              <FarmerReportPDF
+                farmer={farmer}
+                adminInfo={adminInfo}
+                orders={ordersForPDF}
+              />
+            </PDFViewer>
+          );
+        }
+      }
+    } catch (error) {
+      console.error('Error generating farmer report:', error);
+      alert('Failed to generate report. Please try again.');
+    } finally {
+      setIsGeneratingPDF(false);
+    }
   };
 
   const {
@@ -386,11 +561,16 @@ const FarmerProfileScreen = () => {
                   <Button
                     variant="outline"
                     className="w-full sm:w-auto bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 hover:text-gray-900 shadow-sm hover:shadow-md transition-all duration-200 px-4 sm:px-6 py-2.5 font-medium"
-                    disabled
+                    onClick={handleViewReport}
+                    disabled={isGeneratingPDF || !ordersData?.data || !adminInfo || !isStoreAdmin(adminInfo)}
                   >
                     <FileText className="mr-2 h-4 w-4 text-primary" />
-                    <span className="hidden sm:inline">{t('farmerProfile.viewReport')}</span>
-                    <span className="sm:hidden">{t('farmerProfile.report')}</span>
+                    <span className="hidden sm:inline">
+                      {isGeneratingPDF ? 'Generating...' : t('farmerProfile.viewReport')}
+                    </span>
+                    <span className="sm:hidden">
+                      {isGeneratingPDF ? 'Generating...' : t('farmerProfile.report')}
+                    </span>
                   </Button>
                 </div>
               </div>
