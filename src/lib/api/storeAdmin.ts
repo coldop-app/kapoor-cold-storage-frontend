@@ -1,6 +1,7 @@
 import axios from "axios";
 import { BASE_URL } from "@/utils/const";
 import { IncomingOrdersResponse } from "@/utils/types";
+import { KapoorDaybookOrdersResponse } from "@/utils/types";
 
 interface LoginCredentials {
   mobileNumber: string;
@@ -718,5 +719,24 @@ export const storeAdminApi = {
       }
     );
     return response.data;
-  }
+  },
+
+  getKapoorDaybookOrders: async (
+    token: string,
+    type: string = 'all',
+    params: Record<string, unknown> = {}
+  ): Promise<KapoorDaybookOrdersResponse> => {
+    const response = await axios.get<KapoorDaybookOrdersResponse>(
+      `${BASE_URL}/api/store-admin/kapoor/daybook-orders`,
+      {
+        params: { type, ...params },
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      }
+    );
+    return response.data;
+  },
+
+
 };

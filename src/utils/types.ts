@@ -190,3 +190,67 @@ export interface IncomingOrdersResponse {
     previousPage: number | null;
   };
 }
+
+// --- Kapoor Daybook Orders API Types ---
+export interface KapoorDaybookOrderVoucher {
+  type: 'RECEIPT' | 'DELIVERY';
+  voucherNumber: number;
+}
+
+export interface KapoorDaybookOrderFarmerId {
+  _id: string;
+  name: string;
+  farmerId: string;
+}
+
+export interface KapoorDaybookOrderIncomingBagSize {
+  size: string;
+  quantity: number;
+  location: string;
+}
+
+export interface KapoorDaybookOrderOrderDetail {
+  incomingOrder: {
+    voucher: KapoorDaybookOrderVoucher;
+    _id: string;
+    incomingBagSizes: KapoorDaybookOrderIncomingBagSize[];
+  };
+  variety: string;
+  bagSizes: {
+    size: string;
+    quantityRemoved: number;
+    location: string;
+  }[];
+}
+
+export interface KapoorDaybookOrderData {
+  voucher: KapoorDaybookOrderVoucher;
+  _id: string;
+  coldStorageId: string;
+  farmerId: KapoorDaybookOrderFarmerId;
+  dateOfEntry?: string;
+  dateOfExtraction?: string;
+  remarks: string;
+  incomingBagSizes?: KapoorDaybookOrderIncomingBagSize[];
+  variety: string;
+  createdAt: string;
+  currentStockAtThatTime?: number;
+  orderDetails?: KapoorDaybookOrderOrderDetail[];
+}
+
+export interface KapoorDaybookOrdersPagination {
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  itemsPerPage: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+  nextPage: number | null;
+  previousPage: number | null;
+}
+
+export interface KapoorDaybookOrdersResponse {
+  status: string;
+  data: KapoorDaybookOrderData[];
+  pagination: KapoorDaybookOrdersPagination;
+}
