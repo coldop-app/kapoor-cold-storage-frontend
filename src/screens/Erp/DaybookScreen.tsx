@@ -65,6 +65,8 @@ const DaybookScreen = () => {
 
   // Helper function to convert KapoorDaybookOrderData to Order format for voucher cards
   const convertToOrderFormat = (kapoorOrder: KapoorDaybookOrderData): Order => {
+    console.log('Debug - Original Kapoor Order:', kapoorOrder);
+
     if (kapoorOrder.voucher.type === 'RECEIPT') {
       // For receipt orders, convert to IncomingOrderNew format
       return {
@@ -90,7 +92,7 @@ const DaybookScreen = () => {
       } as unknown as Order; // Type assertion to Order
     } else {
       // For delivery orders, convert to Order format
-      return {
+      const convertedOrder = {
         _id: kapoorOrder._id,
         coldStorageId: kapoorOrder.coldStorageId,
         farmerId: {
@@ -104,34 +106,58 @@ const DaybookScreen = () => {
         dateOfExtraction: kapoorOrder.dateOfExtraction || '',
         remarks: kapoorOrder.remarks,
         currentStockAtThatTime: kapoorOrder.currentStockAtThatTime || 0,
-        orderDetails: kapoorOrder.orderDetails?.map(detail => ({
-          variety: detail.variety,
-          incomingOrder: {
-            _id: detail.incomingOrder._id,
-            location: '', // Will be set per bag size
-            voucher: detail.incomingOrder.voucher,
-            incomingBagSizes: detail.incomingOrder.incomingBagSizes.map(bag => {
-              const removedQuantity = detail.bagSizes.find(b => b.size === bag.size)?.quantityRemoved || 0;
+        orderDetails: kapoorOrder.orderDetails?.map(detail => {
+          console.log('Debug - Processing order detail:', detail);
+          console.log('Debug - Detail incomingOrder:', detail.incomingOrder);
+          console.log('Debug - Detail bagSizes:', detail.bagSizes);
+
+          return {
+            variety: detail.variety,
+            incomingOrder: {
+              _id: detail.incomingOrder._id,
+              location: '', // Will be set per bag size
+              voucher: detail.incomingOrder.voucher,
+              incomingBagSizes: detail.incomingOrder.incomingBagSizes.map(bag => {
+                console.log('Debug - Processing incoming bag:', bag);
+                // Find the corresponding bagSize to get the quantityRemoved
+                const correspondingBagSize = detail.bagSizes.find(b => b.size === bag.size);
+                const quantityRemoved = correspondingBagSize?.quantityRemoved || 0;
+
+                // The currentQuantity in the API is already reduced, so we need to add back the removed quantity
+                // to get the original current quantity before the outgoing order
+                const originalCurrentQuantity = bag.quantity.currentQuantity + quantityRemoved;
+
+                console.log('Debug - Original current quantity:', originalCurrentQuantity);
+                console.log('Debug - Quantity removed:', quantityRemoved);
+
+                return {
+                  size: bag.size,
+                  quantity: {
+                    currentQuantity: originalCurrentQuantity, // Use the original quantity before outgoing
+                    initialQuantity: bag.quantity.initialQuantity
+                  },
+                  location: bag.location,
+                  _id: ''
+                };
+              })
+            },
+            bagSizes: detail.bagSizes.map(bag => {
+              console.log('Debug - Processing bag size:', bag);
               return {
                 size: bag.size,
-                quantity: {
-                  currentQuantity: bag.quantity.currentQuantity - removedQuantity,
-                  initialQuantity: bag.quantity.initialQuantity
-                },
-                _id: ''
+                quantityRemoved: bag.quantityRemoved,
+                location: bag.location
               };
             })
-          },
-          bagSizes: detail.bagSizes.map(bag => ({
-            size: bag.size,
-            quantityRemoved: bag.quantityRemoved,
-            location: detail.incomingOrder.incomingBagSizes.find(b => b.size === bag.size)?.location || ''
-          }))
-        })) || [],
+          };
+        }) || [],
         createdAt: kapoorOrder.createdAt,
         updatedAt: kapoorOrder.createdAt,
         __v: 0
       };
+
+      console.log('Debug - Converted Order:', convertedOrder);
+      return convertedOrder;
     }
   };
 

@@ -447,10 +447,9 @@ const DeliveryVoucherCard = ({ order }: DeliveryVoucherCardProps) => {
                      const incomingBagSize = detail.incomingOrder?.incomingBagSizes.find(
                        b => b.size === bagSize.size
                      );
-                     const initialQuantity = incomingBagSize?.quantity?.initialQuantity || 0;
-                     const removedQuantity = bagSize.quantityRemoved || 0;
-                     const currentQuantity = incomingBagSize?.quantity?.currentQuantity || (initialQuantity - removedQuantity);
-                     const availableQuantity = currentQuantity;
+                     const currentQuantity = incomingBagSize?.quantity?.currentQuantity || 0;
+                     const issuedQuantity = bagSize.quantityRemoved || 0;
+                     const availableQuantity = currentQuantity - issuedQuantity;
 
                      return (
                        <div key={`${detailIndex}-${bagIndex}`} className="bg-white rounded-lg p-3 border border-gray-100">
@@ -467,20 +466,20 @@ const DeliveryVoucherCard = ({ order }: DeliveryVoucherCardProps) => {
                            <div className="text-xs text-gray-600">
                              <span className="font-medium">Address:</span> {bagSize.location || detail.incomingOrder?.location || 'N/A'}
                            </div>
-                                                        <div className="grid grid-cols-3 gap-2 text-xs">
-                               <div className="text-center">
-                                 <span className="block text-gray-500">Remaining</span>
-                                 <span className="font-medium text-gray-900">{currentQuantity}</span>
-                               </div>
-                               <div className="text-center">
-                                 <span className="block text-gray-500">Issued</span>
-                                 <span className="font-medium text-rose-600">{removedQuantity}</span>
-                               </div>
-                               <div className="text-center">
-                                 <span className="block text-gray-500">Available</span>
-                                 <span className="font-medium text-primary">{availableQuantity}</span>
-                               </div>
+                           <div className="grid grid-cols-3 gap-2 text-xs">
+                             <div className="text-center">
+                               <span className="block text-gray-500">Current Qty</span>
+                               <span className="font-medium text-gray-900">{currentQuantity}</span>
                              </div>
+                             <div className="text-center">
+                               <span className="block text-gray-500">Qty Issued</span>
+                               <span className="font-medium text-rose-600">{issuedQuantity}</span>
+                             </div>
+                             <div className="text-center">
+                               <span className="block text-gray-500">Available</span>
+                               <span className="font-medium text-primary">{availableQuantity}</span>
+                             </div>
+                           </div>
                          </div>
                        </div>
                      );
@@ -497,21 +496,34 @@ const DeliveryVoucherCard = ({ order }: DeliveryVoucherCardProps) => {
                          <th className="text-left py-3 px-4 font-medium text-gray-900">Bag Type</th>
                          <th className="text-left py-3 px-4 font-medium text-gray-900">Address</th>
                          <th className="text-left py-3 px-4 font-medium text-gray-900">R. Voucher</th>
-                         <th className="text-right py-3 px-4 font-medium text-gray-900">Remaining Qty.</th>
-                         <th className="text-right py-3 px-4 font-medium text-gray-900">Qty. Issued</th>
+                         <th className="text-right py-3 px-4 font-medium text-gray-900">Current Qty</th>
+                         <th className="text-right py-3 px-4 font-medium text-gray-900">Qty Issued</th>
                          <th className="text-right py-3 px-4 font-medium text-gray-900">Available</th>
                        </tr>
                      </thead>
                      <tbody className="divide-y divide-gray-100">
                        {sortedOrderDetails.map((detail, detailIndex) => (
                          detail.bagSizes.map((bagSize, bagIndex) => {
+                           console.log('Debug - Looking for bag size:', bagSize.size);
+                           console.log('Debug - Available incoming bag sizes:', detail.incomingOrder?.incomingBagSizes);
+
                            const incomingBagSize = detail.incomingOrder?.incomingBagSizes.find(
                              b => b.size === bagSize.size
                            );
-                           const initialQuantity = incomingBagSize?.quantity?.initialQuantity || 0;
-                           const removedQuantity = bagSize.quantityRemoved || 0;
-                           const currentQuantity = incomingBagSize?.quantity?.currentQuantity || (initialQuantity - removedQuantity);
-                           const availableQuantity = currentQuantity;
+
+                           // Debug logging
+                           console.log('Debug - Bag Size:', bagSize.size);
+                           console.log('Debug - Incoming Bag Size:', incomingBagSize);
+                           console.log('Debug - Detail:', detail);
+                           console.log('Debug - Incoming Order:', detail.incomingOrder);
+
+                           const currentQuantity = incomingBagSize?.quantity?.currentQuantity || 0;
+                           const issuedQuantity = bagSize.quantityRemoved || 0;
+                           const availableQuantity = currentQuantity - issuedQuantity;
+
+                           console.log('Debug - Current Qty:', currentQuantity);
+                           console.log('Debug - Issued Qty:', issuedQuantity);
+                           console.log('Debug - Available Qty:', availableQuantity);
 
                            return (
                              <tr key={`${detailIndex}-${bagIndex}`} className="hover:bg-gray-50/50 transition-colors">
@@ -533,7 +545,7 @@ const DeliveryVoucherCard = ({ order }: DeliveryVoucherCardProps) => {
                                </td>
                                <td className="py-3 px-4 text-right text-gray-700">{currentQuantity}</td>
                                <td className="py-3 px-4 text-right text-rose-600 font-medium">
-                                 {removedQuantity}
+                                 {issuedQuantity}
                                </td>
                                <td className="py-3 px-4 text-right text-primary font-medium">
                                  {availableQuantity}

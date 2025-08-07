@@ -1,6 +1,6 @@
 import axios from "axios";
 import { BASE_URL } from "@/utils/const";
-import { IncomingOrdersResponse } from "@/utils/types";
+import { IncomingOrdersResponse, KapoorOutgoingOrderResponse } from "@/utils/types";
 import { KapoorDaybookOrdersResponse } from "@/utils/types";
 
 interface LoginCredentials {
@@ -71,6 +71,7 @@ interface CreateOrderPayload {
 interface BagUpdate {
   size: string;
   quantityToRemove: number;
+  location: string; // Add location field
 }
 
 interface OutgoingOrderDetail {
@@ -457,9 +458,9 @@ export const storeAdminApi = {
     return response.data;
   },
 
-  createOutgoingOrder: async (farmerId: string, payload: CreateOutgoingOrderPayload, token: string) => {
-    const response = await axios.post(
-      `${BASE_URL}/api/store-admin/farmers/${farmerId}/outgoing`,
+  createOutgoingOrder: async (farmerAccountId: string, payload: CreateOutgoingOrderPayload, token: string): Promise<KapoorOutgoingOrderResponse> => {
+    const response = await axios.post<KapoorOutgoingOrderResponse>(
+      `${BASE_URL}/api/store-admin/kapoor/outgoing-orders/${farmerAccountId}`,
       payload,
       {
         headers: {

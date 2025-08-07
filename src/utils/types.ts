@@ -266,3 +266,48 @@ export interface KapoorDaybookOrdersResponse {
   data: KapoorDaybookOrderData[];
   pagination: KapoorDaybookOrdersPagination;
 }
+
+// New interface for Kapoor outgoing order response
+export interface KapoorOutgoingOrderResponse {
+  status: string;
+  message: string;
+  outgoingOrder: {
+    coldStorageId: string;
+    farmerAccount: string;
+    voucher: {
+      type: string;
+      voucherNumber: number;
+    };
+    dateOfExtraction: string;
+    currentStockAtThatTime: number;
+    remarks: string;
+    orderDetails: Array<{
+      variety: string;
+      incomingOrder: {
+        _id: string;
+        voucher: {
+          type: string;
+          voucherNumber: number;
+        };
+        incomingBagSizes: Array<{
+          size: string;
+          quantity: {
+            initialQuantity: number;
+            currentQuantity: number;
+          };
+          location: string;
+        }>;
+      };
+      bagSizes: Array<{
+        size: string;
+        quantityRemoved: number;
+        location: string;
+      }>;
+    }>;
+    createdBy: string;
+    _id: string;
+    createdAt: string;
+    updatedAt: string;
+    __v: number;
+  };
+}

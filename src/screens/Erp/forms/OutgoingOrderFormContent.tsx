@@ -120,7 +120,10 @@ interface KapoorIncomingOrder {
   variety: string;
   incomingBagSizes: Array<{
     size: string;
-    quantity: number;
+    quantity: {
+      initialQuantity: number;
+      currentQuantity: number;
+    };
     location: string;
   }>;
   dateOfEntry: string;
@@ -141,6 +144,7 @@ interface CreateOutgoingOrderPayload {
     variety: string;
     bagUpdates: {
       size: string;
+      location: string;
       quantityToRemove: number;
     }[];
   }[];
@@ -389,7 +393,7 @@ const OutgoingOrderFormContent = () => {
     // If we have selections matching all available quantities, deselect all
     const totalAvailableQuantities = filteredOrders.reduce((total: number, order: KapoorIncomingOrder) => {
       order.incomingBagSizes.forEach((bagSize) => {
-        if (bagSize.quantity > 0) {
+        if (bagSize.quantity.currentQuantity > 0) {
           total++;
         }
       });
@@ -406,12 +410,12 @@ const OutgoingOrderFormContent = () => {
     const newSelectedQuantities: BagSizeSelection[] = [];
     filteredOrders.forEach((order: KapoorIncomingOrder) => {
       order.incomingBagSizes.forEach((bagSize) => {
-        if (bagSize.quantity > 0) {
+        if (bagSize.quantity.currentQuantity > 0) {
           newSelectedQuantities.push({
             receiptNumber: order.voucher.voucherNumber,
             bagSize: bagSize.size,
-            selectedQuantity: bagSize.quantity,
-            maxQuantity: bagSize.quantity
+            selectedQuantity: bagSize.quantity.currentQuantity,
+            maxQuantity: bagSize.quantity.currentQuantity
           });
         }
       });
@@ -424,7 +428,7 @@ const OutgoingOrderFormContent = () => {
   const isAllSelected = useMemo(() => {
     const totalAvailableQuantities = filteredOrders.reduce((total: number, order: KapoorIncomingOrder) => {
       order.incomingBagSizes.forEach((bagSize) => {
-        if (bagSize.quantity > 0) {
+        if (bagSize.quantity.currentQuantity > 0) {
           total++;
         }
       });
@@ -442,7 +446,7 @@ const OutgoingOrderFormContent = () => {
       .filter((order: KapoorIncomingOrder) => order.voucher.voucherNumber === voucherNumber)
       .reduce((total: number, order: KapoorIncomingOrder) => {
         order.incomingBagSizes.forEach((bagSize) => {
-          if (bagSize.quantity > 0) {
+          if (bagSize.quantity.currentQuantity > 0) {
             total++;
           }
         });
@@ -461,12 +465,12 @@ const OutgoingOrderFormContent = () => {
 
     const newSelections: BagSizeSelection[] = [];
     order.incomingBagSizes.forEach((bagSize) => {
-      if (bagSize.quantity > 0) {
+      if (bagSize.quantity.currentQuantity > 0) {
         newSelections.push({
           receiptNumber: voucherNumber,
           bagSize: bagSize.size,
-          selectedQuantity: bagSize.quantity,
-          maxQuantity: bagSize.quantity
+          selectedQuantity: bagSize.quantity.currentQuantity,
+          maxQuantity: bagSize.quantity.currentQuantity
         });
       }
     });
@@ -485,7 +489,7 @@ const OutgoingOrderFormContent = () => {
       .filter((order: KapoorIncomingOrder) => order.voucher.voucherNumber === voucherNumber)
       .reduce((total: number, order: KapoorIncomingOrder) => {
         order.incomingBagSizes.forEach((bagSize) => {
-          if (bagSize.quantity > 0) {
+          if (bagSize.quantity.currentQuantity > 0) {
             total++;
           }
         });
@@ -510,15 +514,21 @@ const OutgoingOrderFormContent = () => {
     const groupedByReceipt = selectedQuantities.reduce((acc, sq) => {
       if (!acc[sq.receiptNumber]) {
         acc[sq.receiptNumber] = {
-          bagUpdates: [] as { size: string; quantityToRemove: number }[]
+          bagUpdates: [] as { size: string; location: string; quantityToRemove: number }[]
         };
       }
+
+      // Find the order to get the location
+      const order = filteredOrders.find(o => o.voucher.voucherNumber === sq.receiptNumber);
+      const bagSizeData = order?.incomingBagSizes.find(bag => bag.size === sq.bagSize);
+
       acc[sq.receiptNumber].bagUpdates.push({
-        size: sq.bagSize,  // Use the size exactly as is
+        size: sq.bagSize,
+        location: bagSizeData?.location || '',
         quantityToRemove: sq.selectedQuantity
       });
       return acc;
-    }, {} as Record<number, { bagUpdates: { size: string; quantityToRemove: number }[] }>);
+    }, {} as Record<number, { bagUpdates: { size: string; location: string; quantityToRemove: number }[] }>);
 
     // Find the order IDs from filtered orders
     const orderDetails = filteredOrders.reduce((acc, order) => {
@@ -530,7 +540,7 @@ const OutgoingOrderFormContent = () => {
         });
       }
       return acc;
-    }, [] as { orderId: string; variety: string; bagUpdates: { size: string; quantityToRemove: number }[] }[]);
+    }, [] as { orderId: string; variety: string; bagUpdates: { size: string; location: string; quantityToRemove: number }[] }[]);
 
     return {
       orders: orderDetails,
@@ -542,7 +552,7 @@ const OutgoingOrderFormContent = () => {
   const createOrderMutation: UseMutationResult<unknown, ApiError, CreateOutgoingOrderPayload> = useMutation<unknown, ApiError, CreateOutgoingOrderPayload>({
     mutationFn: (requestBody) =>
       storeAdminApi.createOutgoingOrder(
-        formData.farmerId,
+        selectedFarmerAccount?._id || '',
         requestBody,
         adminInfo?.token || ''
       ),
@@ -801,8 +811,8 @@ const OutgoingOrderFormContent = () => {
                                         const bagSizeData = order.incomingBagSizes.find(bag => bag.size === size);
                                         const totalQuantities = order.incomingBagSizes.reduce((acc: { current: number; initial: number }, bagSize) => {
                                           if (bagSize.size === size) {
-                                            acc.current += bagSize.quantity;
-                                            acc.initial += bagSize.quantity;
+                                            acc.current += bagSize.quantity.currentQuantity;
+                                            acc.initial += bagSize.quantity.initialQuantity;
                                           }
                                           return acc;
                                         }, { current: 0, initial: 0 });
@@ -901,8 +911,8 @@ const OutgoingOrderFormContent = () => {
                                     const bagSizeData = order.incomingBagSizes.find(bag => bag.size === size);
                                     const totalQuantities = order.incomingBagSizes.reduce((acc: { current: number; initial: number }, bagSize) => {
                                       if (bagSize.size === size) {
-                                        acc.current += bagSize.quantity;
-                                        acc.initial += bagSize.quantity;
+                                        acc.current += bagSize.quantity.currentQuantity;
+                                        acc.initial += bagSize.quantity.initialQuantity;
                                       }
                                       return acc;
                                     }, { current: 0, initial: 0 });
