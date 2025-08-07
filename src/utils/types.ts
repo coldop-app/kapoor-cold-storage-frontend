@@ -175,6 +175,7 @@ export interface IncomingOrderNew {
   incomingBagSizes: IncomingBagSizeNew[];
   dateOfEntry: string;
   remarks: string;
+  currentStockAtThatTime: number;
   voucher: {
     type: string;
     voucherNumber: number;

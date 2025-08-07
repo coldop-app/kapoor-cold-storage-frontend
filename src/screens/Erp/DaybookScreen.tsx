@@ -84,6 +84,7 @@ const DaybookScreen = () => {
         incomingBagSizes: kapoorOrder.incomingBagSizes || [],
         dateOfEntry: kapoorOrder.dateOfEntry || '',
         remarks: kapoorOrder.remarks,
+        currentStockAtThatTime: kapoorOrder.currentStockAtThatTime || 0,
         voucher: kapoorOrder.voucher,
         createdAt: kapoorOrder.createdAt
       } as unknown as Order; // Type assertion to Order
@@ -113,8 +114,10 @@ const DaybookScreen = () => {
               const removedQuantity = detail.bagSizes.find(b => b.size === bag.size)?.quantityRemoved || 0;
               return {
                 size: bag.size,
-                currentQuantity: bag.quantity.currentQuantity - removedQuantity,
-                initialQuantity: bag.quantity.initialQuantity,
+                quantity: {
+                  currentQuantity: bag.quantity.currentQuantity - removedQuantity,
+                  initialQuantity: bag.quantity.initialQuantity
+                },
                 _id: ''
               };
             })
