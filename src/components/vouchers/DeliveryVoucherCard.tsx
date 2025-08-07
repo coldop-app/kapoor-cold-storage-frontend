@@ -125,7 +125,7 @@ const DeliveryVoucherCard = ({ order }: DeliveryVoucherCardProps) => {
     if (isWebView()) {
       // Set loading state for WebView
       setIsGeneratingPDF(true);
-      
+
       try {
         console.log('Starting PDF generation for Delivery Voucher...');
 
@@ -139,9 +139,9 @@ const DeliveryVoucherCard = ({ order }: DeliveryVoucherCardProps) => {
         const reader = new FileReader();
         reader.onload = function() {
           const base64Data = (reader.result as string).split(',')[1]; // Remove data:application/pdf;base64, prefix
-          
+
           const fileName = `Delivery_Voucher_${order.voucher.voucherNumber}_${new Date().toISOString().split('T')[0]}.pdf`;
-          
+
           const message: WebViewPDFMessage = {
             type: 'OPEN_PDF_NATIVE',
             title: `Delivery Voucher ${order.voucher.voucherNumber}`,
@@ -151,7 +151,7 @@ const DeliveryVoucherCard = ({ order }: DeliveryVoucherCardProps) => {
 
           window.ReactNativeWebView?.postMessage(JSON.stringify(message));
           console.log('PDF data sent to React Native');
-          
+
           // Reset loading state after successful send
           setIsGeneratingPDF(false);
         };
@@ -198,10 +198,10 @@ const DeliveryVoucherCard = ({ order }: DeliveryVoucherCardProps) => {
       }
     }
 
-    /* 
+    /*
     // COMMENTED OUT: Old print data structure for React Native
     // This was replaced with PDF generation for native viewing
-    
+
     const printData = {
       type: 'PRINT_RECEIPT',
       voucherType: 'DELIVERY',
@@ -224,9 +224,9 @@ const DeliveryVoucherCard = ({ order }: DeliveryVoucherCardProps) => {
           );
           return {
             size: bag.size,
-            initialQuantity: incomingBagSize?.initialQuantity || 0,
+            initialQuantity: incomingBagSize?.quantity?.initialQuantity || 0,
             quantityRemoved: bag.quantityRemoved || 0,
-            availableQuantity: incomingBagSize?.currentQuantity || 0
+            availableQuantity: incomingBagSize?.quantity?.currentQuantity || 0
           };
         })
       })),
@@ -447,9 +447,10 @@ const DeliveryVoucherCard = ({ order }: DeliveryVoucherCardProps) => {
                      const incomingBagSize = detail.incomingOrder?.incomingBagSizes.find(
                        b => b.size === bagSize.size
                      );
-                     const currentQuantity = incomingBagSize?.currentQuantity || 0;
+                     const initialQuantity = incomingBagSize?.quantity?.initialQuantity || 0;
                      const removedQuantity = bagSize.quantityRemoved || 0;
-                     const availableQuantity = currentQuantity - removedQuantity;
+                     const currentQuantity = incomingBagSize?.quantity?.currentQuantity || (initialQuantity - removedQuantity);
+                     const availableQuantity = currentQuantity;
 
                      return (
                        <div key={`${detailIndex}-${bagIndex}`} className="bg-white rounded-lg p-3 border border-gray-100">
@@ -464,22 +465,22 @@ const DeliveryVoucherCard = ({ order }: DeliveryVoucherCardProps) => {
                              </div>
                            </div>
                            <div className="text-xs text-gray-600">
-                             <span className="font-medium">Address:</span> {detail.incomingOrder?.location || 'N/A'}
+                             <span className="font-medium">Address:</span> {bagSize.location || detail.incomingOrder?.location || 'N/A'}
                            </div>
-                           <div className="grid grid-cols-3 gap-2 text-xs">
-                             <div className="text-center">
-                               <span className="block text-gray-500">Current</span>
-                               <span className="font-medium text-gray-900">{currentQuantity}</span>
+                                                        <div className="grid grid-cols-3 gap-2 text-xs">
+                               <div className="text-center">
+                                 <span className="block text-gray-500">Remaining</span>
+                                 <span className="font-medium text-gray-900">{currentQuantity}</span>
+                               </div>
+                               <div className="text-center">
+                                 <span className="block text-gray-500">Issued</span>
+                                 <span className="font-medium text-rose-600">{removedQuantity}</span>
+                               </div>
+                               <div className="text-center">
+                                 <span className="block text-gray-500">Available</span>
+                                 <span className="font-medium text-primary">{availableQuantity}</span>
+                               </div>
                              </div>
-                             <div className="text-center">
-                               <span className="block text-gray-500">Issued</span>
-                               <span className="font-medium text-rose-600">{removedQuantity}</span>
-                             </div>
-                             <div className="text-center">
-                               <span className="block text-gray-500">Available</span>
-                               <span className="font-medium text-primary">{availableQuantity}</span>
-                             </div>
-                           </div>
                          </div>
                        </div>
                      );
@@ -496,7 +497,7 @@ const DeliveryVoucherCard = ({ order }: DeliveryVoucherCardProps) => {
                          <th className="text-left py-3 px-4 font-medium text-gray-900">Bag Type</th>
                          <th className="text-left py-3 px-4 font-medium text-gray-900">Address</th>
                          <th className="text-left py-3 px-4 font-medium text-gray-900">R. Voucher</th>
-                         <th className="text-right py-3 px-4 font-medium text-gray-900">Current Qty.</th>
+                         <th className="text-right py-3 px-4 font-medium text-gray-900">Remaining Qty.</th>
                          <th className="text-right py-3 px-4 font-medium text-gray-900">Qty. Issued</th>
                          <th className="text-right py-3 px-4 font-medium text-gray-900">Available</th>
                        </tr>
@@ -507,15 +508,16 @@ const DeliveryVoucherCard = ({ order }: DeliveryVoucherCardProps) => {
                            const incomingBagSize = detail.incomingOrder?.incomingBagSizes.find(
                              b => b.size === bagSize.size
                            );
-                           const currentQuantity = incomingBagSize?.currentQuantity || 0;
+                           const initialQuantity = incomingBagSize?.quantity?.initialQuantity || 0;
                            const removedQuantity = bagSize.quantityRemoved || 0;
-                           const availableQuantity = currentQuantity - removedQuantity;
+                           const currentQuantity = incomingBagSize?.quantity?.currentQuantity || (initialQuantity - removedQuantity);
+                           const availableQuantity = currentQuantity;
 
                            return (
                              <tr key={`${detailIndex}-${bagIndex}`} className="hover:bg-gray-50/50 transition-colors">
                                <td className="py-3 px-4 font-medium text-gray-900">{bagSize.size}</td>
                                <td className="py-3 px-4 text-gray-700">
-                                 {detail.incomingOrder?.location || 'N/A'}
+                                 {bagSize.location || detail.incomingOrder?.location || 'N/A'}
                                </td>
                                <td className="py-3 px-4">
                                  {detail.incomingOrder ? (

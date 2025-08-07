@@ -12,6 +12,7 @@ import Loader from "@/components/common/Loader/Loader";
 import VarietySelector from "@/components/common/VarietySelector/VarietySelector";
 import { cn } from "@/lib/utils";
 import debounce from "lodash/debounce";
+import { current } from "@reduxjs/toolkit";
 
 interface AnimatedFormStepProps {
   isVisible: boolean;
@@ -92,10 +93,12 @@ interface FormData {
 interface CreateOrderPayload {
   farmerAccount: string;
   variety: string;
-  voucherNumber: number;
   incomingBagSizes: {
     size: string;
-    quantity: number;
+    quantity: {
+      initialQuantity: number;
+      currentQuantity: number;
+    };
     location: string;
   }[];
   dateOfEntry: string;
@@ -292,8 +295,7 @@ const IncomingOrderFormContent = () => {
       return;
     }
 
-    // Use the receipt number from our query and increment by 1
-    const voucherNumber = (receiptData?.receiptNumber || 0) + 1;
+
 
     // Prepare order data according to new API structure
     const incomingBagSizes = adminInfo?.preferences?.bagSizes
@@ -304,11 +306,14 @@ const IncomingOrderFormContent = () => {
 
         return {
           size: bagSize,
-          quantity: quantity,
+          quantity: {
+            initialQuantity: quantity,
+            currentQuantity: quantity
+          },
           location: location
         };
       })
-      .filter(bagSize => bagSize.quantity > 0) || [];
+      .filter(bagSize => bagSize.quantity.initialQuantity > 0) || [];
 
     if (incomingBagSizes.length === 0) {
       toast.error(t('incomingOrder.errors.enterQuantity'));
@@ -318,7 +323,6 @@ const IncomingOrderFormContent = () => {
     const orderData: CreateOrderPayload = {
       farmerAccount: formData.farmerAccount,
       variety: formData.variety,
-      voucherNumber: voucherNumber,
       incomingBagSizes: incomingBagSizes,
       dateOfEntry: formData.dateOfEntry,
       remarks: formData.remarks

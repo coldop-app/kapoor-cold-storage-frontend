@@ -56,10 +56,12 @@ interface SearchByVarietyParams {
 interface CreateOrderPayload {
   farmerAccount: string;
   variety: string;
-  voucherNumber: number;
   incomingBagSizes: {
     size: string;
-    quantity: number;
+    quantity: {
+      initialQuantity: number;
+      currentQuantity: number;
+    };
     location: string;
   }[];
   dateOfEntry: string;
@@ -234,7 +236,10 @@ export interface KapoorSingleFarmerIncomingOrdersResponse {
     variety: string;
     incomingBagSizes: Array<{
       size: string;
-      quantity: number;
+      quantity: {
+        initialQuantity: number;
+        currentQuantity: number;
+      };
       location: string;
     }>;
     dateOfEntry: string;

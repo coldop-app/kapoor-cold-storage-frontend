@@ -65,12 +65,15 @@ export interface BagSize {
   size: string;
   quantity?: BagSizeQuantity;
   quantityRemoved?: number;
+  location?: string;
 }
 
 export interface IncomingBagSize {
   size: string;
-  currentQuantity: number;
-  initialQuantity: number;
+  quantity: {
+    initialQuantity: number;
+    currentQuantity: number;
+  };
   _id: string;
 }
 
@@ -157,7 +160,10 @@ export interface FarmerAccount {
 
 export interface IncomingBagSizeNew {
   size: string;
-  quantity: number;
+  quantity: {
+    initialQuantity: number;
+    currentQuantity: number;
+  };
   location: string;
 }
 
@@ -197,15 +203,20 @@ export interface KapoorDaybookOrderVoucher {
   voucherNumber: number;
 }
 
-export interface KapoorDaybookOrderFarmerId {
+export interface KapoorDaybookFarmerAccount {
   _id: string;
+  address: string,
+  mobileNumber:string,
   name: string;
   farmerId: string;
 }
 
 export interface KapoorDaybookOrderIncomingBagSize {
   size: string;
-  quantity: number;
+  quantity: {
+    initialQuantity: number;
+    currentQuantity: number;
+  };
   location: string;
 }
 
@@ -227,7 +238,7 @@ export interface KapoorDaybookOrderData {
   voucher: KapoorDaybookOrderVoucher;
   _id: string;
   coldStorageId: string;
-  farmerId: KapoorDaybookOrderFarmerId;
+  farmerAccount: KapoorDaybookFarmerAccount;
   dateOfEntry?: string;
   dateOfExtraction?: string;
   remarks: string;

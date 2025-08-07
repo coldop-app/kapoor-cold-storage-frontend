@@ -95,7 +95,7 @@ const ReceiptVoucherCard = ({ order }: ReceiptVoucherCardProps) => {
   const getCurrentStock = (order: Order | IncomingOrderNew) => {
     if (isNewOrderFormat(order)) {
       // Calculate from incoming bag sizes
-      return order.incomingBagSizes.reduce((sum, bag) => sum + bag.quantity, 0);
+      return order.incomingBagSizes.reduce((sum, bag) => sum + bag.quantity.currentQuantity, 0);
     } else {
       return order.currentStockAtThatTime;
     }
@@ -107,8 +107,8 @@ const ReceiptVoucherCard = ({ order }: ReceiptVoucherCardProps) => {
       return order.incomingBagSizes.map(bag => ({
         size: bag.size,
         quantity: {
-          initialQuantity: bag.quantity,
-          currentQuantity: bag.quantity // In new format, current = initial
+          initialQuantity: bag.quantity.initialQuantity,
+          currentQuantity: bag.quantity.currentQuantity
         },
         location: bag.location
       }));
@@ -238,7 +238,10 @@ ${sortedBagSizesWithLocation.map(bag =>
           variety: order.variety,
           bagSizes: getBagSizesWithLocation(order).map(bag => ({
             size: bag.size,
-            quantity: bag.quantity
+            quantity: {
+              initialQuantity: bag.quantity.initialQuantity,
+              currentQuantity: bag.quantity.currentQuantity
+            }
           })),
           location: order.incomingBagSizes[0]?.location || ''
         }],

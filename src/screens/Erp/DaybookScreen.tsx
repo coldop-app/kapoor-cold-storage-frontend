@@ -8,25 +8,10 @@ import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search } from '
 import { useNavigate } from 'react-router-dom';
 import DeliveryVoucherCard from '@/components/vouchers/DeliveryVoucherCard';
 import ReceiptVoucherCard from '@/components/vouchers/ReceiptVoucherCard';
-import { Order } from '@/utils/types';
+import { Order, KapoorDaybookOrderData, KapoorDaybookOrdersResponse } from '@/utils/types';
 import { useTranslation } from 'react-i18next';
 
-interface PaginationMeta {
-  currentPage: number;
-  totalPages: number;
-  totalItems: number;
-  itemsPerPage: number;
-  hasNextPage: boolean;
-  hasPreviousPage: boolean;
-  nextPage: number | null;
-  previousPage: number | null;
-}
 
-interface ApiResponse {
-  status: string;
-  data: Order[];
-  pagination: PaginationMeta;
-}
 
 type OrderType = 'all' | 'incoming' | 'outgoing';
 type SortOrder = 'latest' | 'oldest';
@@ -61,9 +46,10 @@ const DaybookScreen = () => {
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['daybookOrders', { type, sortBy, page: currentPage, limit: itemsPerPage }],
-    queryFn: () => storeAdminApi.getDaybookOrders(
-      { type, sortBy, page: currentPage, limit: itemsPerPage },
-      adminInfo?.token || ''
+    queryFn: () => storeAdminApi.getKapoorDaybookOrders(
+      adminInfo?.token || '',
+      type,
+      { sortBy, page: currentPage, limit: itemsPerPage }
     ),
     enabled: searchReceiptNumber === '',
   });
@@ -75,9 +61,78 @@ const DaybookScreen = () => {
         data: [...(searchResponse?.data?.incoming || []), ...(searchResponse?.data?.outgoing || [])],
         pagination: null
       }
-    : data as ApiResponse;
+    : data as KapoorDaybookOrdersResponse;
 
-  const orders = apiResponse?.data || [];
+  // Helper function to convert KapoorDaybookOrderData to Order format for voucher cards
+  const convertToOrderFormat = (kapoorOrder: KapoorDaybookOrderData): Order => {
+    if (kapoorOrder.voucher.type === 'RECEIPT') {
+      // For receipt orders, convert to IncomingOrderNew format
+      return {
+        _id: kapoorOrder._id,
+        coldStorageId: kapoorOrder.coldStorageId,
+        farmerAccount: {
+          _id: kapoorOrder.farmerAccount._id,
+          profile: {
+            _id: kapoorOrder.farmerAccount._id,
+            name: kapoorOrder.farmerAccount.name,
+            address: kapoorOrder.farmerAccount.address
+          },
+          variety: kapoorOrder.variety,
+          farmerId: kapoorOrder.farmerAccount.farmerId
+        },
+        variety: kapoorOrder.variety,
+        incomingBagSizes: kapoorOrder.incomingBagSizes || [],
+        dateOfEntry: kapoorOrder.dateOfEntry || '',
+        remarks: kapoorOrder.remarks,
+        voucher: kapoorOrder.voucher,
+        createdAt: kapoorOrder.createdAt
+      } as unknown as Order; // Type assertion to Order
+    } else {
+      // For delivery orders, convert to Order format
+      return {
+        _id: kapoorOrder._id,
+        coldStorageId: kapoorOrder.coldStorageId,
+        farmerId: {
+          _id: kapoorOrder.farmerAccount._id,
+          name: kapoorOrder.farmerAccount.name,
+          address: kapoorOrder.farmerAccount.address,
+          mobileNumber: kapoorOrder.farmerAccount.mobileNumber,
+          farmerId: kapoorOrder.farmerAccount.farmerId
+        },
+        voucher: kapoorOrder.voucher,
+        dateOfExtraction: kapoorOrder.dateOfExtraction || '',
+        remarks: kapoorOrder.remarks,
+        currentStockAtThatTime: kapoorOrder.currentStockAtThatTime || 0,
+        orderDetails: kapoorOrder.orderDetails?.map(detail => ({
+          variety: detail.variety,
+          incomingOrder: {
+            _id: detail.incomingOrder._id,
+            location: '', // Will be set per bag size
+            voucher: detail.incomingOrder.voucher,
+            incomingBagSizes: detail.incomingOrder.incomingBagSizes.map(bag => {
+              const removedQuantity = detail.bagSizes.find(b => b.size === bag.size)?.quantityRemoved || 0;
+              return {
+                size: bag.size,
+                currentQuantity: bag.quantity.currentQuantity - removedQuantity,
+                initialQuantity: bag.quantity.initialQuantity,
+                _id: ''
+              };
+            })
+          },
+          bagSizes: detail.bagSizes.map(bag => ({
+            size: bag.size,
+            quantityRemoved: bag.quantityRemoved,
+            location: detail.incomingOrder.incomingBagSizes.find(b => b.size === bag.size)?.location || ''
+          }))
+        })) || [],
+        createdAt: kapoorOrder.createdAt,
+        updatedAt: kapoorOrder.createdAt,
+        __v: 0
+      };
+    }
+  };
+
+  const orders = (apiResponse?.data || []) as KapoorDaybookOrderData[];
   const pagination = apiResponse?.pagination;
 
   // Reset to first page when filters change
@@ -421,15 +476,18 @@ const DaybookScreen = () => {
             </div>
           ) : (
             <div>
-              {orders.map((order: Order) => (
-                <div key={order._id} className="py-2 sm:py-3">
-                  {order.voucher.type === 'DELIVERY' ? (
-                    <DeliveryVoucherCard order={order} />
-                  ) : (
-                    <ReceiptVoucherCard order={order} />
-                  )}
-                </div>
-              ))}
+              {orders.map((kapoorOrder: KapoorDaybookOrderData) => {
+                const order = convertToOrderFormat(kapoorOrder);
+                return (
+                  <div key={kapoorOrder._id} className="py-2 sm:py-3">
+                    {kapoorOrder.voucher.type === 'DELIVERY' ? (
+                      <DeliveryVoucherCard order={order} />
+                    ) : (
+                      <ReceiptVoucherCard order={order} />
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
