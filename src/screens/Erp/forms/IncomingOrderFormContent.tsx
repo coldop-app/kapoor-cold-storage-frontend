@@ -80,6 +80,7 @@ interface FormData {
   farmerAccount: string;
   quantities: BagQuantities;
   bagLocations: { [key: string]: string };
+  bagLocationDetails: { [key: string]: { chamber: string; floor: string; row: string } };
 
   // Step 2
   remarks: string;
@@ -139,6 +140,7 @@ const IncomingOrderFormContent = () => {
     farmerAccount: "",
     quantities: {},
     bagLocations: {},
+    bagLocationDetails: {},
     remarks: "",
     voucherNumber: 0,
     dateOfEntry: new Date().toISOString().split('T')[0],
@@ -204,6 +206,28 @@ const IncomingOrderFormContent = () => {
     }));
   };
 
+  const updateLocationDetails = (bagType: string, field: 'chamber' | 'floor' | 'row', value: string) => {
+    setFormData(prev => {
+      const currentDetails = prev.bagLocationDetails[bagType] || { chamber: '', floor: '', row: '' };
+      const updatedDetails = { ...currentDetails, [field]: value };
+
+      // Combine into single location string
+      const locationString = `${updatedDetails.chamber}-${updatedDetails.floor}-${updatedDetails.row}`;
+
+      return {
+        ...prev,
+        bagLocationDetails: {
+          ...prev.bagLocationDetails,
+          [bagType]: updatedDetails
+        },
+        bagLocations: {
+          ...prev.bagLocations,
+          [bagType]: locationString
+        }
+      };
+    });
+  };
+
   const calculateTotal = () => {
     return Object.values(formData.quantities)
       .reduce((sum, quantity) => sum + (parseInt(quantity) || 0), 0);
@@ -251,6 +275,7 @@ const IncomingOrderFormContent = () => {
         farmerAccount: "",
         quantities: {},
         bagLocations: {},
+        bagLocationDetails: {},
         remarks: "",
         voucherNumber: 0,
         dateOfEntry: new Date().toISOString().split('T')[0],
@@ -691,31 +716,59 @@ const IncomingOrderFormContent = () => {
                   {adminInfo?.preferences?.bagSizes?.map((bagSize) => {
                     const fieldName = getBagSizeFieldName(bagSize);
                     const quantity = parseInt(formData.quantities[fieldName] || "0");
+                    const locationDetails = formData.bagLocationDetails[fieldName] || { chamber: '', floor: '', row: '' };
 
                     // Only show location input if quantity > 0
                     if (quantity === 0) return null;
 
                     return (
-                      <div key={bagSize}>
-                        <label className="block text-sm font-medium mb-2">
+                      <div key={bagSize} className="space-y-3">
+                        <label className="block text-sm font-medium">
                           {formatBagSizeLabel(bagSize)} - {t('incomingOrder.location.label')}
                         </label>
-                        <input
-                          type="text"
-                          value={formData.bagLocations[fieldName] || ""}
-                          onChange={(e) => {
-                            setFormData(prev => ({
-                              ...prev,
-                              bagLocations: {
-                                ...prev.bagLocations,
-                                [fieldName]: e.target.value
-                              }
-                            }));
-                          }}
-                          placeholder={t('incomingOrder.location.placeholder')}
-                          className="w-full p-3 border border-border rounded-md bg-background focus:ring-2 focus:ring-primary focus:border-primary transition"
-                          required
-                        />
+                        <div className="grid grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-muted-foreground mb-1">
+                              Chamber
+                            </label>
+                            <input
+                              type="text"
+                              value={locationDetails.chamber}
+                              onChange={(e) => updateLocationDetails(fieldName, 'chamber', e.target.value)}
+                              className="w-full p-2 border border-border rounded-md bg-background focus:ring-2 focus:ring-primary focus:border-primary transition text-center"
+                              required
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-muted-foreground mb-1">
+                              Floor
+                            </label>
+                            <input
+                              type="text"
+                              value={locationDetails.floor}
+                              onChange={(e) => updateLocationDetails(fieldName, 'floor', e.target.value)}
+                              className="w-full p-2 border border-border rounded-md bg-background focus:ring-2 focus:ring-primary focus:border-primary transition text-center"
+                              required
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-muted-foreground mb-1">
+                              Row
+                            </label>
+                            <input
+                              type="text"
+                              value={locationDetails.row}
+                              onChange={(e) => updateLocationDetails(fieldName, 'row', e.target.value)}
+                              className="w-full p-2 border border-border rounded-md bg-background focus:ring-2 focus:ring-primary focus:border-primary transition text-center"
+                              required
+                            />
+                          </div>
+                        </div>
+                        {formData.bagLocations[fieldName] && (
+                          <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
+                            Combined Location: <span className="font-medium">{formData.bagLocations[fieldName]}</span>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
