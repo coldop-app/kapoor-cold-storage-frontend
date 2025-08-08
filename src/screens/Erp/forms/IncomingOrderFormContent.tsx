@@ -10,9 +10,9 @@ import { RootState } from "@/store";
 import { StoreAdmin } from "@/utils/types";
 import Loader from "@/components/common/Loader/Loader";
 import VarietySelector from "@/components/common/VarietySelector/VarietySelector";
+import AddVarietyModal from "@/components/modals/AddVarietyModal";
 import { cn } from "@/lib/utils";
 import debounce from "lodash/debounce";
-import { current } from "@reduxjs/toolkit";
 
 interface AnimatedFormStepProps {
   isVisible: boolean;
@@ -133,6 +133,7 @@ const IncomingOrderFormContent = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedFarmer, setSelectedFarmer] = useState<Farmer | null>(null);
+  const [showAddVarietyModal, setShowAddVarietyModal] = useState(false);
 
   const [formData, setFormData] = useState<FormData>({
     farmerName: farmer?.name || "",
@@ -187,6 +188,7 @@ const IncomingOrderFormContent = () => {
         farmerName: farmer.name,
         farmerId: farmer._id
       }));
+      setSelectedFarmer(farmer);
     }
   }, [farmer]);
 
@@ -371,8 +373,17 @@ const IncomingOrderFormContent = () => {
       farmerId: selectedFarmer._id,
       variety: '' // Clear variety when farmer changes
     }));
+    setSelectedFarmer(selectedFarmer);
     setSearchQuery(selectedFarmer.name);
     setShowDropdown(false);
+  };
+
+  const handleAddVarietySuccess = () => {
+    // Refetch farmer accounts to get the new variety
+    if (formData.farmerId) {
+      // This will trigger a refetch of farmer accounts
+      // The query will automatically refetch when the modal closes
+    }
   };
 
   // Close dropdown when clicking outside
@@ -567,14 +578,25 @@ const IncomingOrderFormContent = () => {
                         </button>
                       )}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => navigate('/erp/new-farmer')}
-                      className="flex items-center gap-2 px-4 py-3 bg-primary text-secondary rounded-md hover:bg-primary/85 transition font-semibold focus:outline-none focus:ring-2 focus:ring-primary/50"
-                    >
-                      <Plus size={18} />
-                      <span className="text-sm">{t('incomingOrder.farmer.new')}</span>
-                    </button>
+                    {selectedFarmer ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowAddVarietyModal(true)}
+                        className="flex items-center gap-2 px-4 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-semibold focus:outline-none focus:ring-2 focus:ring-green-500"
+                      >
+                        <Plus size={18} />
+                        <span className="text-sm">Add Variety</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => navigate('/erp/new-farmer')}
+                        className="flex items-center gap-2 px-4 py-3 bg-primary text-secondary rounded-md hover:bg-primary/85 transition font-semibold focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      >
+                        <Plus size={18} />
+                        <span className="text-sm">{t('incomingOrder.farmer.new')}</span>
+                      </button>
+                    )}
 
                     {/* Search Results Dropdown */}
                     {showDropdown && (searchResults?.data?.length > 0 || isSearching) && (
@@ -815,6 +837,17 @@ const IncomingOrderFormContent = () => {
           )}
         </AnimatedFormStep>
       </form>
+
+      {/* Add Variety Modal */}
+      {selectedFarmer && (
+        <AddVarietyModal
+          isOpen={showAddVarietyModal}
+          onClose={() => setShowAddVarietyModal(false)}
+          farmer={selectedFarmer}
+          token={adminInfo?.token || ''}
+          onSuccess={handleAddVarietySuccess}
+        />
+      )}
     </div>
   );
 };
