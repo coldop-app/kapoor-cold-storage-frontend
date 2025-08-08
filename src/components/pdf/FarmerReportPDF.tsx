@@ -135,8 +135,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
     justifyContent: "center",
   },
-  colLocation: {
-    width: "8%",
+  colChamber: {
+    width: "6%",
+    borderRightWidth: 0.5,
+    borderRightColor: "#666",
+    paddingHorizontal: 2,
+    justifyContent: "center",
+  },
+  colFloor: {
+    width: "6%",
+    borderRightWidth: 0.5,
+    borderRightColor: "#666",
+    paddingHorizontal: 2,
+    justifyContent: "center",
+  },
+  colRow: {
+    width: "6%",
     borderRightWidth: 0.5,
     borderRightColor: "#666",
     paddingHorizontal: 2,
@@ -299,11 +313,36 @@ interface LedgerEntry {
   voucher: number;
   type: "RECEIPT" | "DELIVERY";
   variety: string;
-  location: string;
+  location: { chamber: string; floor: string; row: string };
   quantities: { [bagSize: string]: number }; // Map of bag size to quantity
   total: number;
   grandTotal: number;
 }
+
+// Parse location string into chamber, floor, and row
+const parseLocation = (location: string | undefined) => {
+  if (!location) return { chamber: "-", floor: "-", row: "-" };
+
+  const parts = location.trim().split("-");
+  if (parts.length >= 3) {
+    return {
+      chamber: parts[0] || "-",
+      floor: parts[1] || "-",
+      row: parts[2] || "-",
+    };
+  } else if (parts.length === 2) {
+    return {
+      chamber: parts[0] || "-",
+      floor: parts[1] || "-",
+      row: "-",
+    };
+  }
+  return {
+    chamber: parts[0] || "-",
+    floor: "-",
+    row: "-",
+  };
+};
 
 const formatDate = (date: string | Date | undefined): string => {
   if (!date) return "-";
@@ -378,28 +417,54 @@ const FarmerReportPDF: React.FC<FarmerReportPDFProps> = ({
         quantities[size] = 0;
       });
 
-      // Collect all quantities for this voucher
-      let voucherTotal = 0;
+      // Create separate entries for each unique location-variety combination
       order.orderDetails.forEach((detail) => {
+        // Group bags by location
+        const bagsByLocation = new Map<
+          string,
+          { size: string; quantity: number }[]
+        >();
+
         detail.bagSizes.forEach((bag) => {
-          const quantity = bag.quantity?.initialQuantity || 0;
-          quantities[bag.size] = (quantities[bag.size] || 0) + quantity;
-          voucherTotal += quantity;
+          const location = bag.location || detail.location || "-";
+          if (!bagsByLocation.has(location)) {
+            bagsByLocation.set(location, []);
+          }
+          bagsByLocation.get(location)?.push({
+            size: bag.size,
+            quantity: bag.quantity?.initialQuantity || 0,
+          });
         });
-      });
 
-      // Get the first variety and location for the voucher
-      const firstDetail = order.orderDetails[0];
+        // Create an entry for each location
+        bagsByLocation.forEach((bags, location) => {
+          // Initialize quantities for this location
+          const locationQuantities: { [bagSize: string]: number } = {};
+          bagSizes.forEach((size) => {
+            locationQuantities[size] = 0;
+          });
 
-      entries.push({
-        date: getOrderDate(order),
-        voucher: order.voucher.voucherNumber,
-        type: "RECEIPT",
-        variety: firstDetail?.variety || "-",
-        location: firstDetail?.location || "-",
-        quantities,
-        total: voucherTotal,
-        grandTotal: 0, // Will be calculated after sorting
+          // Fill in the quantities for this location
+          let locationTotal = 0;
+          bags.forEach((bag) => {
+            locationQuantities[bag.size] = bag.quantity;
+            locationTotal += bag.quantity;
+          });
+
+          if (locationTotal > 0) {
+            // Only add entry if there are bags
+            entries.push({
+              date: getOrderDate(order),
+              voucher: order.voucher.voucherNumber,
+              type: "RECEIPT",
+              variety: detail.variety || "-",
+              location: parseLocation(location),
+              quantities: locationQuantities,
+              total: locationTotal,
+              grandTotal: 0, // Will be calculated after sorting
+            });
+          }
+        });
       });
     });
 
@@ -428,28 +493,54 @@ const FarmerReportPDF: React.FC<FarmerReportPDFProps> = ({
         quantities[size] = 0;
       });
 
-      // Collect all quantities for this voucher
-      let voucherTotal = 0;
+      // Create separate entries for each unique location-variety combination
       order.orderDetails.forEach((detail) => {
+        // Group bags by location
+        const bagsByLocation = new Map<
+          string,
+          { size: string; quantity: number }[]
+        >();
+
         detail.bagSizes.forEach((bag) => {
-          const quantity = bag.quantityRemoved || 0;
-          quantities[bag.size] = (quantities[bag.size] || 0) + quantity;
-          voucherTotal += quantity;
+          const location = bag.location || detail.location || "-";
+          if (!bagsByLocation.has(location)) {
+            bagsByLocation.set(location, []);
+          }
+          bagsByLocation.get(location)?.push({
+            size: bag.size,
+            quantity: bag.quantityRemoved || 0,
+          });
         });
-      });
 
-      // Get the first variety and location for the voucher
-      const firstDetail = order.orderDetails[0];
+        // Create an entry for each location
+        bagsByLocation.forEach((bags, location) => {
+          // Initialize quantities for this location
+          const locationQuantities: { [bagSize: string]: number } = {};
+          bagSizes.forEach((size) => {
+            locationQuantities[size] = 0;
+          });
 
-      entries.push({
-        date: getOrderDate(order),
-        voucher: order.voucher.voucherNumber,
-        type: "DELIVERY",
-        variety: firstDetail?.variety || "-",
-        location: firstDetail?.location || "-",
-        quantities,
-        total: voucherTotal,
-        grandTotal: 0, // Will be calculated after sorting
+          // Fill in the quantities for this location
+          let locationTotal = 0;
+          bags.forEach((bag) => {
+            locationQuantities[bag.size] = bag.quantity;
+            locationTotal += bag.quantity;
+          });
+
+          if (locationTotal > 0) {
+            // Only add entry if there are bags
+            entries.push({
+              date: getOrderDate(order),
+              voucher: order.voucher.voucherNumber,
+              type: "DELIVERY",
+              variety: detail.variety || "-",
+              location: parseLocation(location),
+              quantities: locationQuantities,
+              total: locationTotal,
+              grandTotal: 0, // Will be calculated after sorting
+            });
+          }
+        });
       });
     });
 
@@ -510,8 +601,14 @@ const FarmerReportPDF: React.FC<FarmerReportPDFProps> = ({
             <View style={styles.colVariety}>
               <Text style={styles.cellHeaderText}>VARIETY</Text>
             </View>
-            <View style={styles.colLocation}>
-              <Text style={styles.cellHeaderText}>LOCATION</Text>
+            <View style={styles.colChamber}>
+              <Text style={styles.cellHeaderText}>CH</Text>
+            </View>
+            <View style={styles.colFloor}>
+              <Text style={styles.cellHeaderText}>FL</Text>
+            </View>
+            <View style={styles.colRow}>
+              <Text style={styles.cellHeaderText}>ROW</Text>
             </View>
             {bagSizes.map((size) => (
               <View key={size} style={styles.colBagSize}>
@@ -544,7 +641,13 @@ const FarmerReportPDF: React.FC<FarmerReportPDFProps> = ({
               <View style={styles.colVariety}>
                 <Text style={styles.balanceText}>-</Text>
               </View>
-              <View style={styles.colLocation}>
+              <View style={styles.colChamber}>
+                <Text style={styles.balanceText}>-</Text>
+              </View>
+              <View style={styles.colFloor}>
+                <Text style={styles.balanceText}>-</Text>
+              </View>
+              <View style={styles.colRow}>
                 <Text style={styles.balanceText}>-</Text>
               </View>
               {bagSizes.map((size) => (
@@ -572,8 +675,14 @@ const FarmerReportPDF: React.FC<FarmerReportPDFProps> = ({
               <View style={styles.colVariety}>
                 <Text style={styles.cellTextLeft}>{entry.variety}</Text>
               </View>
-              <View style={styles.colLocation}>
-                <Text style={styles.cellText}>{entry.location}</Text>
+              <View style={styles.colChamber}>
+                <Text style={styles.cellText}>{entry.location.chamber}</Text>
+              </View>
+              <View style={styles.colFloor}>
+                <Text style={styles.cellText}>{entry.location.floor}</Text>
+              </View>
+              <View style={styles.colRow}>
+                <Text style={styles.cellText}>{entry.location.row}</Text>
               </View>
               {bagSizes.map((size) => (
                 <View key={size} style={styles.colBagSize}>
@@ -615,7 +724,13 @@ const FarmerReportPDF: React.FC<FarmerReportPDFProps> = ({
               <View style={styles.colVariety}>
                 <Text style={styles.balanceText}>-</Text>
               </View>
-              <View style={styles.colLocation}>
+              <View style={styles.colChamber}>
+                <Text style={styles.balanceText}>-</Text>
+              </View>
+              <View style={styles.colFloor}>
+                <Text style={styles.balanceText}>-</Text>
+              </View>
+              <View style={styles.colRow}>
                 <Text style={styles.balanceText}>-</Text>
               </View>
               {bagSizes.map((size) => (
