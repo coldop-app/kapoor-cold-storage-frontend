@@ -1,29 +1,29 @@
-import { useSelector } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
-import { RootState } from '@/store';
-import { Order, StoreAdmin, BagSize, IncomingOrderNew } from '@/utils/types';
+import { useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
+import { RootState } from "@/store";
+import { Order, StoreAdmin, BagSize, IncomingOrderNew } from "@/utils/types";
 
 // Extended BagSize interface with location
 interface BagSizeWithLocation extends BagSize {
   location?: string;
 }
-import { ChevronDown, ChevronUp, Pencil, Share2 } from 'lucide-react';
-import { useState, useMemo } from 'react';
-import { Printer } from 'lucide-react';
-import { PDFViewer, pdf } from '@react-pdf/renderer';
-import OrderVoucherPDF from '../pdf/OrderVoucherPDF';
-import * as ReactDOM from 'react-dom/client';
-import { toast } from 'react-hot-toast';
+import { ChevronDown, ChevronUp, Pencil, Share2 } from "lucide-react";
+import { useState, useMemo } from "react";
+import { Printer } from "lucide-react";
+import { PDFViewer, pdf } from "@react-pdf/renderer";
+import OrderVoucherPDF from "../pdf/OrderVoucherPDF";
+import * as ReactDOM from "react-dom/client";
+import { toast } from "react-hot-toast";
 
 interface WebViewMessage {
-  type: 'SHARE_CARD';
+  type: "SHARE_CARD";
   title: string;
   message: string;
 }
 
 // Add PDF message interface
 interface WebViewPDFMessage {
-  type: 'OPEN_PDF_NATIVE';
+  type: "OPEN_PDF_NATIVE";
   title: string;
   fileName: string;
   pdfData: string; // base64 encoded PDF
@@ -46,12 +46,16 @@ interface ReceiptVoucherCardProps {
 const ReceiptVoucherCard = ({ order }: ReceiptVoucherCardProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false); // Loading state for PDF generation
-  const adminInfo = useSelector((state: RootState) => state.auth.adminInfo) as StoreAdmin | null;
+  const adminInfo = useSelector(
+    (state: RootState) => state.auth.adminInfo
+  ) as StoreAdmin | null;
   const navigate = useNavigate();
 
   // Helper function to check if order is new format
-  const isNewOrderFormat = (order: Order | IncomingOrderNew): order is IncomingOrderNew => {
-    return 'farmerAccount' in order;
+  const isNewOrderFormat = (
+    order: Order | IncomingOrderNew
+  ): order is IncomingOrderNew => {
+    return "farmerAccount" in order;
   };
 
   // Helper function to get farmer info
@@ -61,14 +65,14 @@ const ReceiptVoucherCard = ({ order }: ReceiptVoucherCardProps) => {
         name: order.farmerAccount.profile.name,
         farmerId: order.farmerAccount.farmerId,
         address: order.farmerAccount.profile.address,
-        mobileNumber: '' // Not available in new format
+        mobileNumber: "", // Not available in new format
       };
     } else {
       return {
         name: order.farmerId.name,
         farmerId: order.farmerId.farmerId,
         address: order.farmerId.address,
-        mobileNumber: order.farmerId.mobileNumber
+        mobileNumber: order.farmerId.mobileNumber,
       };
     }
   };
@@ -78,7 +82,7 @@ const ReceiptVoucherCard = ({ order }: ReceiptVoucherCardProps) => {
     if (isNewOrderFormat(order)) {
       return order.variety;
     } else {
-      return order.orderDetails[0]?.variety || '';
+      return order.orderDetails[0]?.variety || "";
     }
   };
 
@@ -87,7 +91,7 @@ const ReceiptVoucherCard = ({ order }: ReceiptVoucherCardProps) => {
     if (isNewOrderFormat(order)) {
       return order.dateOfEntry;
     } else {
-      return order.dateOfSubmission || '';
+      return order.dateOfSubmission || "";
     }
   };
 
@@ -102,21 +106,25 @@ const ReceiptVoucherCard = ({ order }: ReceiptVoucherCardProps) => {
   };
 
   // Helper function to get bag sizes with location
-  const getBagSizesWithLocation = (order: Order | IncomingOrderNew): BagSizeWithLocation[] => {
+  const getBagSizesWithLocation = (
+    order: Order | IncomingOrderNew
+  ): BagSizeWithLocation[] => {
     if (isNewOrderFormat(order)) {
-      return order.incomingBagSizes.map(bag => ({
+      return order.incomingBagSizes.map((bag) => ({
         size: bag.size,
         quantity: {
           initialQuantity: bag.quantity.initialQuantity,
-          currentQuantity: bag.quantity.currentQuantity
+          currentQuantity: bag.quantity.currentQuantity,
         },
-        location: bag.location
+        location: bag.location,
       }));
     } else {
-      return order.orderDetails[0]?.bagSizes.map(bag => ({
-        ...bag,
-        location: order.orderDetails[0]?.location || ''
-      })) || [];
+      return (
+        order.orderDetails[0]?.bagSizes.map((bag) => ({
+          ...bag,
+          location: order.orderDetails[0]?.location || "",
+        })) || []
+      );
     }
   };
 
@@ -129,8 +137,8 @@ const ReceiptVoucherCard = ({ order }: ReceiptVoucherCardProps) => {
     // Create a map of normalized bag size names to their index in admin preferences
     const preferenceOrder = new Map(
       adminInfo.preferences.bagSizes.map((size, index) => [
-        size.toLowerCase().replace(/[-\s]/g, ''), // Normalize by removing hyphens and spaces
-        index
+        size.toLowerCase().replace(/[-\s]/g, ""), // Normalize by removing hyphens and spaces
+        index,
       ])
     );
 
@@ -140,8 +148,8 @@ const ReceiptVoucherCard = ({ order }: ReceiptVoucherCardProps) => {
 
       return [...bagSizes].sort((a, b) => {
         // Normalize the bag size names for comparison
-        const aNormalized = a.size.toLowerCase().replace(/[-\s]/g, '');
-        const bNormalized = b.size.toLowerCase().replace(/[-\s]/g, '');
+        const aNormalized = a.size.toLowerCase().replace(/[-\s]/g, "");
+        const bNormalized = b.size.toLowerCase().replace(/[-\s]/g, "");
 
         const aIndex = preferenceOrder.get(aNormalized);
         const bIndex = preferenceOrder.get(bNormalized);
@@ -168,14 +176,16 @@ const ReceiptVoucherCard = ({ order }: ReceiptVoucherCardProps) => {
 
   // Calculate total initial quantity for Lot No
   const calculateLotNo = () => {
-    return getBagSizesWithLocation(order).reduce((sum: number, bagSize: BagSizeWithLocation) =>
-      sum + (bagSize.quantity?.initialQuantity || 0), 0
+    return getBagSizesWithLocation(order).reduce(
+      (sum: number, bagSize: BagSizeWithLocation) =>
+        sum + (bagSize.quantity?.initialQuantity || 0),
+      0
     );
   };
 
   // Add a helper function to format bag size name for display
   const formatBagSizeName = (size: string): string => {
-    return size;  // Return the size name exactly as it is
+    return size; // Return the size name exactly as it is
   };
 
   const isWebView = () => {
@@ -196,15 +206,20 @@ Party: ${farmerInfo.name} (${farmerInfo.farmerId})
 Variety: ${variety}
 Lot No: ${lotNo}
 Current Stock: ${currentStock}
-${order.remarks ? `Remarks: ${order.remarks}` : ''}
+${order.remarks ? `Remarks: ${order.remarks}` : ""}
 
 Stock Details:
-${sortedBagSizesWithLocation.map(bag =>
-  `${bag.size}: ${bag.quantity?.currentQuantity || 0}/${bag.quantity?.initialQuantity || 0} (${(bag as BagSizeWithLocation).location || 'N/A'})`
-).join('\n')}`;
+${sortedBagSizesWithLocation
+  .map(
+    (bag) =>
+      `${bag.size}: ${bag.quantity?.currentQuantity || 0}/${
+        bag.quantity?.initialQuantity || 0
+      } (${(bag as BagSizeWithLocation).location || "N/A"})`
+  )
+  .join("\n")}`;
 
     const message: WebViewMessage = {
-      type: 'SHARE_CARD',
+      type: "SHARE_CARD",
       title: "Receipt Voucher " + order.voucher.voucherNumber,
       message: orderSummary,
     };
@@ -224,30 +239,32 @@ ${sortedBagSizesWithLocation.map(bag =>
           name: farmerInfo.name,
           address: farmerInfo.address,
           mobileNumber: farmerInfo.mobileNumber,
-          farmerId: farmerInfo.farmerId
+          farmerId: farmerInfo.farmerId,
         },
         voucher: {
-          type: order.voucher.type as 'RECEIPT' | 'DELIVERY',
-          voucherNumber: order.voucher.voucherNumber
+          type: order.voucher.type as "RECEIPT" | "DELIVERY",
+          voucherNumber: order.voucher.voucherNumber,
         },
         dateOfSubmission: order.dateOfEntry,
         fulfilled: false,
         remarks: order.remarks,
         currentStockAtThatTime: getCurrentStock(order),
-        orderDetails: [{
+        orderDetails: getBagSizesWithLocation(order).map((bag) => ({
           variety: order.variety,
-          bagSizes: getBagSizesWithLocation(order).map(bag => ({
-            size: bag.size,
-            quantity: {
-              initialQuantity: bag.quantity?.initialQuantity || 0,
-              currentQuantity: bag.quantity?.currentQuantity || 0
-            }
-          })),
-          location: order.incomingBagSizes[0]?.location || ''
-        }],
+          bagSizes: [
+            {
+              size: bag.size,
+              quantity: {
+                initialQuantity: bag.quantity?.initialQuantity || 0,
+                currentQuantity: bag.quantity?.currentQuantity || 0,
+              },
+            },
+          ],
+          location: bag.location || "",
+        })),
         createdAt: order.createdAt,
         updatedAt: order.createdAt,
-        __v: 0
+        __v: 0,
       };
     }
     return order;
@@ -256,21 +273,27 @@ ${sortedBagSizesWithLocation.map(bag =>
   const handleEdit = () => {
     // Check if any bag size has different initial and current quantities
     const bagSizes = getBagSizesWithLocation(order);
-    const hasOutgoingOrders = bagSizes.some(bagSize =>
-      (bagSize.quantity?.initialQuantity || 0) !== (bagSize.quantity?.currentQuantity || 0)
+    const hasOutgoingOrders = bagSizes.some(
+      (bagSize) =>
+        (bagSize.quantity?.initialQuantity || 0) !==
+        (bagSize.quantity?.currentQuantity || 0)
     );
 
     if (hasOutgoingOrders) {
-      toast.error('Edit is not allowed for this receipt as outgoing has been done from it');
+      toast.error(
+        "Edit is not allowed for this receipt as outgoing has been done from it"
+      );
       return;
     }
 
-    navigate('/erp/incoming-order/edit', { state: { order: convertToOldFormat(order) } });
+    navigate("/erp/incoming-order/edit", {
+      state: { order: convertToOldFormat(order) },
+    });
   };
 
   const handlePrint = async () => {
     if (!adminInfo) {
-      alert('Admin information not available for PDF generation');
+      alert("Admin information not available for PDF generation");
       return;
     }
 
@@ -279,52 +302,65 @@ ${sortedBagSizesWithLocation.map(bag =>
       setIsGeneratingPDF(true);
 
       try {
-        console.log('Starting PDF generation for Receipt Voucher...');
+        console.log("Starting PDF generation for Receipt Voucher...");
 
-        const pdfDoc = <OrderVoucherPDF order={convertToOldFormat(order)} adminInfo={adminInfo} />;
+        const convertedOrder = convertToOldFormat(order);
+        console.log("PDF Generation Data:", {
+          order: convertedOrder,
+          adminInfo: adminInfo,
+        });
+
+        const pdfDoc = (
+          <OrderVoucherPDF
+            order={convertToOldFormat(order)}
+            adminInfo={adminInfo}
+          />
+        );
 
         // Generate PDF as blob
         const pdfBlob = await pdf(pdfDoc).toBlob();
-        console.log('PDF blob generated, size:', pdfBlob.size, 'bytes');
+        console.log("PDF blob generated, size:", pdfBlob.size, "bytes");
 
         // Convert blob to base64
         const reader = new FileReader();
-        reader.onload = function() {
-          const base64Data = (reader.result as string).split(',')[1]; // Remove data:application/pdf;base64, prefix
+        reader.onload = function () {
+          const base64Data = (reader.result as string).split(",")[1]; // Remove data:application/pdf;base64, prefix
 
-          const fileName = `Receipt_Voucher_${order.voucher.voucherNumber}_${new Date().toISOString().split('T')[0]}.pdf`;
+          const fileName = `Receipt_Voucher_${order.voucher.voucherNumber}_${
+            new Date().toISOString().split("T")[0]
+          }.pdf`;
 
           const message: WebViewPDFMessage = {
-            type: 'OPEN_PDF_NATIVE',
+            type: "OPEN_PDF_NATIVE",
             title: `Receipt Voucher ${order.voucher.voucherNumber}`,
             fileName: fileName,
-            pdfData: base64Data
+            pdfData: base64Data,
           };
 
           window.ReactNativeWebView?.postMessage(JSON.stringify(message));
-          console.log('PDF data sent to React Native');
+          console.log("PDF data sent to React Native");
 
           // Reset loading state after successful send
           setIsGeneratingPDF(false);
         };
 
-        reader.onerror = function() {
-          console.error('Error converting PDF to base64');
-          alert('Error preparing PDF for native viewer. Please try again.');
+        reader.onerror = function () {
+          console.error("Error converting PDF to base64");
+          alert("Error preparing PDF for native viewer. Please try again.");
           // Reset loading state on error
           setIsGeneratingPDF(false);
         };
 
         reader.readAsDataURL(pdfBlob);
       } catch (error) {
-        console.error('Error generating PDF:', error);
-        alert('Failed to generate PDF. Please try again.');
+        console.error("Error generating PDF:", error);
+        alert("Failed to generate PDF. Please try again.");
         // Reset loading state on error
         setIsGeneratingPDF(false);
       }
     } else {
       // Handle printing in web browser (existing PDF functionality)
-      const printWindow = window.open('', '_blank');
+      const printWindow = window.open("", "_blank");
       if (printWindow && adminInfo) {
         printWindow.document.write(`
           <html>
@@ -339,11 +375,14 @@ ${sortedBagSizesWithLocation.map(bag =>
         `);
 
         // Render PDF viewer in the new window
-        const root = printWindow.document.getElementById('root');
+        const root = printWindow.document.getElementById("root");
         if (root) {
           ReactDOM.createRoot(root).render(
             <PDFViewer width="100%" height="100%">
-              <OrderVoucherPDF order={convertToOldFormat(order)} adminInfo={adminInfo} />
+              <OrderVoucherPDF
+                order={convertToOldFormat(order)}
+                adminInfo={adminInfo}
+              />
             </PDFViewer>
           );
         }
@@ -408,15 +447,24 @@ ${sortedBagSizesWithLocation.map(bag =>
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 bg-primary rounded-full flex-shrink-0"></div>
             <span className="text-sm font-medium text-gray-900">
-              Receipt Voucher: <span className="text-primary">{order.voucher.voucherNumber}</span>
+              Receipt Voucher:{" "}
+              <span className="text-primary">
+                {order.voucher.voucherNumber}
+              </span>
             </span>
           </div>
           <div className="flex items-center gap-2">
             <div className="text-xs text-gray-600 bg-gray-50 px-2 py-1 rounded-md">
-              Date: <span className="font-medium text-gray-900">{getDate(order) || 'N/A'}</span>
+              Date:{" "}
+              <span className="font-medium text-gray-900">
+                {getDate(order) || "N/A"}
+              </span>
             </div>
             <div className="text-xs text-gray-600 bg-gray-50 px-2 py-1 rounded-md">
-              C.Stock: <span className="font-medium text-gray-900">{getCurrentStock(order)}</span>
+              C.Stock:{" "}
+              <span className="font-medium text-gray-900">
+                {getCurrentStock(order)}
+              </span>
             </div>
           </div>
         </div>
@@ -429,19 +477,27 @@ ${sortedBagSizesWithLocation.map(bag =>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-x-3 gap-y-3">
               <div className="min-w-0">
                 <span className="text-xs text-gray-500 block">Variety</span>
-                <p className="text-sm font-medium text-gray-900 truncate">{getVariety(order)}</p>
+                <p className="text-sm font-medium text-gray-900 truncate">
+                  {getVariety(order)}
+                </p>
               </div>
               <div className="min-w-0">
                 <span className="text-xs text-gray-500 block">Lot No</span>
-                <p className="text-sm font-medium text-gray-900">{order.voucher.voucherNumber}/{calculateLotNo()}</p>
+                <p className="text-sm font-medium text-gray-900">
+                  {order.voucher.voucherNumber}/{calculateLotNo()}
+                </p>
               </div>
               <div className="min-w-0">
                 <span className="text-xs text-gray-500 block">Party Name</span>
-                <p className="text-sm font-medium text-gray-900 truncate">{getFarmerInfo(order).name}</p>
+                <p className="text-sm font-medium text-gray-900 truncate">
+                  {getFarmerInfo(order).name}
+                </p>
               </div>
               <div className="min-w-0">
                 <span className="text-xs text-gray-500 block">Acc No</span>
-                <p className="text-sm font-medium text-gray-900">{getFarmerInfo(order).farmerId}</p>
+                <p className="text-sm font-medium text-gray-900">
+                  {getFarmerInfo(order).farmerId}
+                </p>
               </div>
             </div>
           </div>
@@ -462,7 +518,7 @@ ${sortedBagSizesWithLocation.map(bag =>
                 disabled={isWebView() && isGeneratingPDF}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500/20 transition-all duration-200 flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {(isWebView() && isGeneratingPDF) ? (
+                {isWebView() && isGeneratingPDF ? (
                   <>
                     <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-gray-600"></div>
                     <span className="hidden xs:inline">Generating...</span>
@@ -512,15 +568,25 @@ ${sortedBagSizesWithLocation.map(bag =>
           <div className="p-3 sm:p-4 lg:p-5 space-y-6">
             {/* Farmer Details */}
             <div className="bg-gray-50/50 rounded-xl p-4 border border-gray-100">
-              <h3 className="text-sm font-medium text-gray-900 mb-4">Farmer Details</h3>
+              <h3 className="text-sm font-medium text-gray-900 mb-4">
+                Farmer Details
+              </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <span className="text-xs text-gray-500 block mb-1">Address</span>
-                  <p className="text-sm font-medium text-gray-900">{getFarmerInfo(order).address || 'N/A'}</p>
+                  <span className="text-xs text-gray-500 block mb-1">
+                    Address
+                  </span>
+                  <p className="text-sm font-medium text-gray-900">
+                    {getFarmerInfo(order).address || "N/A"}
+                  </p>
                 </div>
                 <div>
-                  <span className="text-xs text-gray-500 block mb-1">Mobile Number</span>
-                  <p className="text-sm font-medium text-gray-900">{getFarmerInfo(order).mobileNumber || 'N/A'}</p>
+                  <span className="text-xs text-gray-500 block mb-1">
+                    Mobile Number
+                  </span>
+                  <p className="text-sm font-medium text-gray-900">
+                    {getFarmerInfo(order).mobileNumber || "N/A"}
+                  </p>
                 </div>
               </div>
             </div>
@@ -533,17 +599,24 @@ ${sortedBagSizesWithLocation.map(bag =>
                   const current = bagSize.quantity?.currentQuantity || 0;
                   const initial = bagSize.quantity?.initialQuantity || 0;
                   const bagName = bagSize.size;
-                  const location = (bagSize as BagSizeWithLocation).location || 'N/A';
+                  const location =
+                    (bagSize as BagSizeWithLocation).location || "N/A";
 
                   return (
                     <div key={idx} className="bg-gray-50 rounded-lg p-3">
                       <div className="flex justify-between items-center mb-2">
-                        <span className="text-sm font-medium text-gray-900">{bagName}</span>
-                        <span className="text-sm font-medium text-gray-900">{current}/{initial}</span>
+                        <span className="text-sm font-medium text-gray-900">
+                          {bagName}
+                        </span>
+                        <span className="text-sm font-medium text-gray-900">
+                          {current}/{initial}
+                        </span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-xs text-gray-500">Location:</span>
-                        <span className="text-xs font-medium text-gray-700">{location}</span>
+                        <span className="text-xs font-medium text-gray-700">
+                          {location}
+                        </span>
                       </div>
                     </div>
                   );
@@ -552,10 +625,21 @@ ${sortedBagSizesWithLocation.map(bag =>
                 {/* Total Row for Mobile */}
                 <div className="bg-primary/5 rounded-lg p-3 border border-primary/10">
                   <div className="flex justify-between items-center">
-                    <span className="text-sm font-semibold text-gray-900">Total</span>
+                    <span className="text-sm font-semibold text-gray-900">
+                      Total
+                    </span>
                     <span className="text-sm font-semibold text-primary">
-                      {sortedBagSizesWithLocation.reduce((sum, bag) => sum + (bag.quantity?.currentQuantity || 0), 0)}/
-                      {sortedBagSizesWithLocation.reduce((sum, bag) => sum + (bag.quantity?.initialQuantity || 0), 0)}
+                      {sortedBagSizesWithLocation.reduce(
+                        (sum, bag) =>
+                          sum + (bag.quantity?.currentQuantity || 0),
+                        0
+                      )}
+                      /
+                      {sortedBagSizesWithLocation.reduce(
+                        (sum, bag) =>
+                          sum + (bag.quantity?.initialQuantity || 0),
+                        0
+                      )}
                     </span>
                   </div>
                 </div>
@@ -582,7 +666,8 @@ ${sortedBagSizesWithLocation.map(bag =>
                       <tbody>
                         {sortedBagSizesWithLocation.map((bagSize, idx) => {
                           const qty = bagSize.quantity;
-                          const location = (bagSize as BagSizeWithLocation).location || 'N/A';
+                          const location =
+                            (bagSize as BagSizeWithLocation).location || "N/A";
                           return (
                             <tr key={idx} className="border-b border-gray-100">
                               <td className="py-3 px-3 text-center">
@@ -593,12 +678,17 @@ ${sortedBagSizesWithLocation.map(bag =>
                               <td className="py-3 px-3 text-center">
                                 {qty && qty.initialQuantity ? (
                                   <span className="font-medium text-gray-900">
-                                    {qty.currentQuantity || 0}/{qty.initialQuantity}
+                                    {qty.currentQuantity || 0}/
+                                    {qty.initialQuantity}
                                   </span>
-                                ) : '-'}
+                                ) : (
+                                  "-"
+                                )}
                               </td>
                               <td className="py-3 px-3 text-center">
-                                <span className="text-sm text-gray-700">{location}</span>
+                                <span className="text-sm text-gray-700">
+                                  {location}
+                                </span>
                               </td>
                             </tr>
                           );
@@ -606,12 +696,23 @@ ${sortedBagSizesWithLocation.map(bag =>
                         {/* Total Row */}
                         <tr className="bg-primary/5 border-b border-primary/10">
                           <td className="py-3 px-3 text-center">
-                            <span className="font-semibold text-gray-900">Total</span>
+                            <span className="font-semibold text-gray-900">
+                              Total
+                            </span>
                           </td>
                           <td className="py-3 px-3 text-center">
                             <span className="font-semibold text-primary">
-                              {sortedBagSizesWithLocation.reduce((sum, bag) => sum + (bag.quantity?.currentQuantity || 0), 0)}/
-                              {sortedBagSizesWithLocation.reduce((sum, bag) => sum + (bag.quantity?.initialQuantity || 0), 0)}
+                              {sortedBagSizesWithLocation.reduce(
+                                (sum, bag) =>
+                                  sum + (bag.quantity?.currentQuantity || 0),
+                                0
+                              )}
+                              /
+                              {sortedBagSizesWithLocation.reduce(
+                                (sum, bag) =>
+                                  sum + (bag.quantity?.initialQuantity || 0),
+                                0
+                              )}
                             </span>
                           </td>
                           <td className="py-3 px-3 text-center">
@@ -623,15 +724,17 @@ ${sortedBagSizesWithLocation.map(bag =>
                   </div>
                 </div>
               </div>
-
-
             </div>
 
             {/* Remarks Section */}
             {order.remarks && (
               <div className="bg-yellow-50/50 rounded-xl p-4 border border-yellow-100">
-                <h3 className="text-sm font-medium text-gray-900 mb-2">Remarks</h3>
-                <p className="text-sm text-gray-700 leading-relaxed break-words">{order.remarks}</p>
+                <h3 className="text-sm font-medium text-gray-900 mb-2">
+                  Remarks
+                </h3>
+                <p className="text-sm text-gray-700 leading-relaxed break-words">
+                  {order.remarks}
+                </p>
               </div>
             )}
           </div>

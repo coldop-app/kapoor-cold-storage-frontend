@@ -166,11 +166,35 @@ const styles = StyleSheet.create({
   },
 
   // Table Columns
-  colVariety: {
-    width: "20%",
+  colChamber: {
+    width: "6%",
     borderRightWidth: 1,
     borderRightColor: "#000",
-    padding: 5,
+    padding: 3,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  colFloor: {
+    width: "6%",
+    borderRightWidth: 1,
+    borderRightColor: "#000",
+    padding: 3,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  colRow: {
+    width: "6%",
+    borderRightWidth: 1,
+    borderRightColor: "#000",
+    padding: 3,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  colVariety: {
+    width: "12%",
+    borderRightWidth: 1,
+    borderRightColor: "#000",
+    padding: 3,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -178,24 +202,16 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRightWidth: 1,
     borderRightColor: "#000",
-    padding: 5,
+    padding: 3,
     justifyContent: "center",
     alignItems: "center",
   },
   colTotal: {
-    width: "15%",
-    borderRightWidth: 1,
-    borderRightColor: "#000",
-    padding: 5,
+    width: "8%",
+    padding: 3,
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "#f9f9f9",
-  },
-  colLocation: {
-    width: "20%",
-    padding: 5,
-    justifyContent: "center",
-    alignItems: "center",
   },
 
   // Table Text Styles
@@ -305,44 +321,6 @@ const styles = StyleSheet.create({
     color: "#333",
   },
 
-  // Marka styles
-  markaContainer: {
-    marginTop: 15,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  markaStamp: {
-    width: 120,
-    height: 120,
-    borderWidth: 3,
-    borderColor: "#000",
-    borderRadius: 60,
-    justifyContent: "center",
-    alignItems: "center",
-    transform: "rotate(-15deg)",
-    position: "relative",
-  },
-  markaInnerCircle: {
-    width: 110,
-    height: 110,
-    borderWidth: 1,
-    borderColor: "#000",
-    borderRadius: 55,
-    justifyContent: "center",
-    alignItems: "center",
-    position: "absolute",
-  },
-  markaText: {
-    fontSize: 16,
-    fontWeight: "bold",
-    textAlign: "center",
-  },
-  markaLabel: {
-    fontSize: 12,
-    fontWeight: "bold",
-    marginBottom: 5,
-  },
-
   // Footer styles
   footer: {
     position: "absolute",
@@ -420,13 +398,6 @@ const OrderVoucherPDF: React.FC<OrderVoucherPDFProps> = ({
     }, 0);
   };
 
-  // Calculate marka (format as "voucherNumber/totalBags")
-  const calculateMarka = () => {
-    const totalBags = calculateTotalBags();
-    if (totalBags === 0) return "-";
-    return `${order.voucher.voucherNumber}/${totalBags}`;
-  };
-
   // Convert number to words (basic implementation)
   const numberToWords = (num: number): string => {
     const ones = [
@@ -489,33 +460,137 @@ const OrderVoucherPDF: React.FC<OrderVoucherPDFProps> = ({
     quantity: number | string;
   }
 
+  interface LocationDetails {
+    chamber: string;
+    floor: string;
+    row: string;
+  }
+
   interface TableRow {
     variety: string;
     bagSizes: TableBagSize[];
-    location: string;
+    location: LocationDetails;
   }
+
+  // Parse location string into chamber, floor, and row
+  const parseLocation = (location: string): LocationDetails => {
+    if (!location || typeof location !== "string") {
+      return { chamber: "", floor: "", row: "" };
+    }
+
+    // Expected format: "2-1-C" or "2-1-A" etc.
+    const parts = location.trim().split("-");
+
+    // Handle different possible formats
+    if (parts.length >= 3) {
+      return {
+        chamber: parts[0] || "",
+        floor: parts[1] || "",
+        row: parts[2] || "",
+      };
+    } else if (parts.length === 2) {
+      // If only 2 parts, assume it's chamber-floor
+      return {
+        chamber: parts[0] || "",
+        floor: parts[1] || "",
+        row: "",
+      };
+    } else if (parts.length === 1) {
+      // If only 1 part, assume it's chamber
+      return {
+        chamber: parts[0] || "",
+        floor: "",
+        row: "",
+      };
+    }
+
+    return { chamber: "", floor: "", row: "" };
+  };
 
   // Create table rows from order details
   const createTableRows = () => {
     const rows: TableRow[] = [];
 
-    order.orderDetails.forEach(detail => {
-      // Create a map of size to quantity for this detail
-      const sizeQuantityMap = new Map(
-        detail.bagSizes.map(bag => [
-          bag.size,
-          isReceipt ? bag.quantity?.initialQuantity || 0 : bag.quantityRemoved || 0
-        ])
-      );
+    order.orderDetails.forEach((detail) => {
+      // For each bag size, create a separate row if it has a quantity
+      detail.bagSizes.forEach((bag) => {
+        const quantity = isReceipt
+          ? bag.quantity?.initialQuantity || 0
+          : bag.quantityRemoved || 0;
 
-      // Add a row for each variety
-      rows.push({
-        variety: detail.variety,
-        bagSizes: allBagSizes.map(size => ({
-          size,
-          quantity: sizeQuantityMap.get(size) || "-"
-        })),
-        location: detail.location || "",
+        if (quantity > 0) {
+          // Parse location for this specific bag
+          // Priority: bag.location > detail.location > incomingOrder.location
+          let locationString = "";
+
+          // Try to get location from different possible sources
+          // Priority: bag.location > detail.location > incomingOrder.location
+          if (bag.location) {
+            locationString = bag.location;
+          } else if (detail.location) {
+            locationString = detail.location;
+          } else if (detail.incomingOrder?.location) {
+            locationString = detail.incomingOrder.location;
+          }
+
+          // For outgoing orders, try to get location from the incoming order's bag sizes
+          if (!locationString && detail.incomingOrder?.incomingBagSizes) {
+            const matchingIncomingBag =
+              detail.incomingOrder.incomingBagSizes.find(
+                (incomingBag) => incomingBag.size === bag.size
+              );
+            // Note: IncomingBagSize doesn't have location property, but some newer types do
+            if (matchingIncomingBag && "location" in matchingIncomingBag) {
+              locationString = (matchingIncomingBag as { location: string })
+                .location;
+            }
+          }
+
+          // If still no location, try to get from the incoming order's bag sizes with location
+          if (!locationString && detail.incomingOrder?.incomingBagSizes) {
+            // Look for any bag size with location in the incoming order
+            const bagWithLocation = detail.incomingOrder.incomingBagSizes.find(
+              (incomingBag) =>
+                "location" in incomingBag &&
+                (incomingBag as { location: string }).location
+            );
+            if (bagWithLocation && "location" in bagWithLocation) {
+              locationString = (bagWithLocation as { location: string })
+                .location;
+            }
+          }
+
+          // If still no location, try to get from the order details level
+          if (!locationString && detail.location) {
+            locationString = detail.location;
+          }
+
+          // If still no location, try to get from the incoming order level
+          if (!locationString && detail.incomingOrder?.location) {
+            locationString = detail.incomingOrder.location;
+          }
+
+          const locationDetails = parseLocation(locationString);
+
+          // Debug: Log the location data for this bag
+          console.log(
+            `Bag ${bag.size}: locationString="${locationString}", parsed=`,
+            locationDetails
+          );
+
+          // Create a row with this specific bag size and location
+          const bagSizesMap = new Map();
+          bagSizesMap.set(bag.size, quantity);
+
+          rows.push({
+            variety: detail.variety,
+            bagSizes: allBagSizes.map((size) => ({
+              size,
+              quantity: bagSizesMap.get(size) || "-",
+            })),
+            location: locationDetails,
+          });
+        }
       });
     });
 
@@ -529,11 +604,36 @@ const OrderVoucherPDF: React.FC<OrderVoucherPDFProps> = ({
   const calculateRowTotal = (bagSizes: TableBagSize[]) => {
     return bagSizes.reduce((sum, bag) => {
       const qty = bag.quantity;
-      return sum + (typeof qty === 'number' ? qty : 0);
+      return sum + (typeof qty === "number" ? qty : 0);
     }, 0);
   };
 
-  console.log("order is: ", order);
+  // Calculate column totals for each bag size
+  const calculateColumnTotals = () => {
+    const columnTotals = new Map<string, number>();
+
+    // Initialize totals for all bag sizes
+    allBagSizes.forEach((size) => columnTotals.set(size, 0));
+
+    // Sum up quantities for each column
+    tableRows.forEach((row) => {
+      row.bagSizes.forEach((bag) => {
+        const qty = bag.quantity;
+        const currentTotal = columnTotals.get(bag.size) || 0;
+        columnTotals.set(
+          bag.size,
+          currentTotal + (typeof qty === "number" ? qty : 0)
+        );
+      });
+    });
+
+    return columnTotals;
+  };
+
+  // Get column totals for the marka row
+  const columnTotals = calculateColumnTotals();
+  // Calculate total of all column totals
+
   return (
     <Document>
       <Page size="A4" style={styles.page}>
@@ -566,7 +666,8 @@ const OrderVoucherPDF: React.FC<OrderVoucherPDFProps> = ({
               </Text>
               <Text style={styles.managerInfo}>
                 Manager{"\n"}
-                {adminInfo.name}{"\n"}
+                {adminInfo.name}
+                {"\n"}
                 {adminInfo.mobileNumber}
               </Text>
             </View>
@@ -577,14 +678,22 @@ const OrderVoucherPDF: React.FC<OrderVoucherPDFProps> = ({
         <View style={styles.infoSection}>
           {/* Voucher Number and Date */}
           <View style={styles.infoRowSplit}>
-            <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
-              <Text style={styles.infoLabel}>{isReceipt ? "Receipt Voucher No:" : "Delivery Voucher No:"}</Text>
-              <Text style={styles.infoValue}>{order.voucher.voucherNumber}</Text>
+            <View
+              style={{ flexDirection: "row", alignItems: "center", flex: 1 }}
+            >
+              <Text style={styles.infoLabel}>
+                {isReceipt ? "Receipt Voucher No:" : "Delivery Voucher No:"}
+              </Text>
+              <Text style={styles.infoValue}>
+                {order.voucher.voucherNumber}
+              </Text>
             </View>
             <View style={styles.dateContainer}>
               <Text style={styles.dateLabel}>Dated:</Text>
               <Text style={styles.dateValue}>
-                {new Date(order.createdAt || new Date()).toLocaleDateString("en-GB")}
+                {new Date(order.createdAt || new Date()).toLocaleDateString(
+                  "en-GB"
+                )}
               </Text>
             </View>
           </View>
@@ -604,13 +713,17 @@ const OrderVoucherPDF: React.FC<OrderVoucherPDFProps> = ({
           {/* Address */}
           <View style={styles.infoRowMain}>
             <Text style={styles.infoLabel}>Address:</Text>
-            <Text style={styles.infoValue}>{order.farmerId.address || 'N/A'}</Text>
+            <Text style={styles.infoValue}>
+              {order.farmerId.address || "N/A"}
+            </Text>
           </View>
 
           {/* Mobile */}
           <View style={styles.infoRowMain}>
             <Text style={styles.infoLabel}>Mobile:</Text>
-            <Text style={styles.infoValue}>{order.farmerId.mobileNumber || 'N/A'}</Text>
+            <Text style={styles.infoValue}>
+              {order.farmerId.mobileNumber || "N/A"}
+            </Text>
           </View>
         </View>
 
@@ -618,43 +731,106 @@ const OrderVoucherPDF: React.FC<OrderVoucherPDFProps> = ({
         <View style={styles.tableContainer}>
           {/* Table Header */}
           <View style={styles.tableHeader}>
+            <View style={styles.colChamber}>
+              <Text style={[styles.tableHeaderText, { fontSize: 8 }]}>CH</Text>
+            </View>
+            <View style={styles.colFloor}>
+              <Text style={[styles.tableHeaderText, { fontSize: 8 }]}>FL</Text>
+            </View>
+            <View style={styles.colRow}>
+              <Text style={[styles.tableHeaderText, { fontSize: 8 }]}>Row</Text>
+            </View>
             <View style={styles.colVariety}>
-              <Text style={styles.tableHeaderText}>Variety</Text>
+              <Text style={[styles.tableHeaderText, { fontSize: 8 }]}>
+                Variety
+              </Text>
             </View>
             {allBagSizes.map((size, index) => (
               <View key={index} style={styles.colBagSize}>
-                <Text style={styles.tableHeaderText}>{size}</Text>
+                <Text style={[styles.tableHeaderText, { fontSize: 8 }]}>
+                  {size}
+                </Text>
               </View>
             ))}
             <View style={styles.colTotal}>
-              <Text style={styles.tableHeaderText}>Total</Text>
-            </View>
-            <View style={styles.colLocation}>
-              <Text style={styles.tableHeaderText}>Location</Text>
+              <Text style={[styles.tableHeaderText, { fontSize: 8 }]}>
+                Total
+              </Text>
             </View>
           </View>
 
           {/* Table Rows */}
           {tableRows.map((row, index) => (
             <View key={index} style={styles.tableRow}>
+              <View style={styles.colChamber}>
+                <Text style={[styles.tableCellText, { fontSize: 8 }]}>
+                  {row.location.chamber}
+                </Text>
+              </View>
+              <View style={styles.colFloor}>
+                <Text style={[styles.tableCellText, { fontSize: 8 }]}>
+                  {row.location.floor}
+                </Text>
+              </View>
+              <View style={styles.colRow}>
+                <Text style={[styles.tableCellText, { fontSize: 8 }]}>
+                  {row.location.row}
+                </Text>
+              </View>
               <View style={styles.colVariety}>
-                <Text style={styles.tableCellText}>{row.variety}</Text>
+                <Text style={[styles.tableCellText, { fontSize: 8 }]}>
+                  {row.variety}
+                </Text>
               </View>
               {row.bagSizes.map((bag, bagIndex) => (
                 <View key={bagIndex} style={styles.colBagSize}>
-                  <Text style={styles.tableCellText}>{bag.quantity}</Text>
+                  <Text style={[styles.tableCellText, { fontSize: 8 }]}>
+                    {bag.quantity}
+                  </Text>
                 </View>
               ))}
               <View style={styles.colTotal}>
-                <Text style={styles.tableCellTextBold}>
+                <Text style={[styles.tableCellTextBold, { fontSize: 8 }]}>
                   {calculateRowTotal(row.bagSizes)}
                 </Text>
               </View>
-              <View style={styles.colLocation}>
-                <Text style={styles.tableCellText}>{row.location}</Text>
-              </View>
             </View>
           ))}
+
+          {/* Marka Row */}
+          <View style={[styles.tableRow, { backgroundColor: "#f5f5f5" }]}>
+            <View style={styles.colChamber}>
+              <Text style={[styles.tableCellTextBold, { fontSize: 8 }]}>-</Text>
+            </View>
+            <View style={styles.colFloor}>
+              <Text style={[styles.tableCellTextBold, { fontSize: 8 }]}>-</Text>
+            </View>
+            <View style={styles.colRow}>
+              <Text style={[styles.tableCellTextBold, { fontSize: 8 }]}>-</Text>
+            </View>
+            <View style={styles.colVariety}>
+              <Text style={[styles.tableCellTextBold, { fontSize: 8 }]}>
+                Marka
+              </Text>
+            </View>
+            {allBagSizes.map((size, index) => (
+              <View key={index} style={styles.colBagSize}>
+                <Text style={[styles.tableCellTextBold, { fontSize: 8 }]}>
+                  {columnTotals.get(size)
+                    ? `${order.farmerId.farmerId}/${columnTotals.get(size)}`
+                    : ""}
+                </Text>
+              </View>
+            ))}
+            <View style={styles.colTotal}>
+              <Text style={[styles.tableCellTextBold, { fontSize: 8 }]}>
+                {Array.from(columnTotals.values()).reduce(
+                  (sum, total) => sum + total,
+                  0
+                )}
+              </Text>
+            </View>
+          </View>
         </View>
 
         {/* Bottom Section */}
@@ -676,16 +852,6 @@ const OrderVoucherPDF: React.FC<OrderVoucherPDFProps> = ({
                 <Text style={styles.remarksText}>{order.remarks}</Text>
               </View>
             )}
-
-            {/* Marka */}
-            <View style={styles.markaContainer}>
-              <View style={styles.markaStamp}>
-                <View style={styles.markaInnerCircle}>
-                  <Text style={styles.markaLabel}>Marka</Text>
-                  <Text style={styles.markaText}>{calculateMarka()}</Text>
-                </View>
-              </View>
-            </View>
           </View>
 
           {/* Right Section - Signature */}
@@ -700,10 +866,7 @@ const OrderVoucherPDF: React.FC<OrderVoucherPDFProps> = ({
 
         {/* Footer with Coldop Branding */}
         <View style={styles.footer}>
-          <Image
-            style={styles.coldopLogo}
-            src="/coldop-logo.png"
-          />
+          <Image style={styles.coldopLogo} src="/coldop-logo.png" />
           <Text style={styles.coldopText}>Powered by Coldop</Text>
         </View>
       </Page>
