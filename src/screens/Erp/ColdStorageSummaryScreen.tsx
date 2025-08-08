@@ -14,36 +14,55 @@ import VarietyDistributionChart from '@/components/charts/VarietyDistributionCha
 import TopFarmersChart from '@/components/charts/TopFarmersChart';
 import StockSummaryTable from '@/components/common/StockSummaryTable';
 
-interface StockSummary {
-  variety: string;
-  sizes: {
-    size: string;
-    initialQuantity: number;
-    currentQuantity: number;
-  }[];
+interface KapoorStockSummarySize {
+  size: string;
+  initialQuantity: number;
+  currentQuantity: number;
+  quantityRemoved?: number;
 }
 
-interface StockTrendItem {
+interface KapoorStockSummary {
+  variety: string;
+  sizes: KapoorStockSummarySize[];
+}
+
+interface KapoorStockTrendItem {
   month: string;
   totalStock: number;
 }
 
-interface StockSummaryResponse {
+interface KapoorStockSummaryResponse {
   status: string;
-  stockSummary: StockSummary[];
-  stockTrend: StockTrendItem[];
+  stockSummary: KapoorStockSummary[];
+  stockTrend: KapoorStockTrendItem[];
 }
 
+interface KapoorTopFarmer {
+  _id: string;
+  totalBags: number;
+  varieties: string[];
+  bagSummary: {
+    [key: string]: number;
+  };
+  farmerId: string;
+  farmerName: string;
+  fatherName: string;
+  address: string;
+  mobileNumber: string;
+  accountId: string;
+}
 
+interface KapoorTopFarmersResponse {
+  status: string;
+  message: string;
+  data: KapoorTopFarmer[];
+}
 
-
-
-
-const calculateVarietyTotal = (sizes: StockSummary['sizes']) => {
+const calculateVarietyTotal = (sizes: KapoorStockSummary['sizes']) => {
   return sizes.reduce((acc, size) => acc + size.currentQuantity, 0);
 };
 
-const calculateTotalBags = (stockSummary: StockSummary[]) => {
+const calculateTotalBags = (stockSummary: KapoorStockSummary[]) => {
   return stockSummary.reduce((total, variety) => {
     return total + variety.sizes.reduce((sum, size) => sum + size.currentQuantity, 0);
   }, 0);
@@ -63,18 +82,19 @@ const ColdStorageSummaryScreen = () => {
   const adminInfo = useSelector((state: RootState) => state.auth.adminInfo) as StoreAdmin | null;
 
   const { data: stockData, isLoading: isStockLoading } = useQuery({
-    queryKey: ['coldStorageSummary', adminInfo?.token],
-    queryFn: () => storeAdminApi.getColdStorageSummary(adminInfo?.token || ''),
+    queryKey: ['kapoorColdStorageSummary', adminInfo?.token],
+    queryFn: () => storeAdminApi.kapoorColdStorageSummary(adminInfo?.token || ''),
     enabled: !!adminInfo?.token,
   });
 
   const { data: topFarmersData, isLoading: isTopFarmersLoading } = useQuery({
-    queryKey: ['topFarmers', adminInfo?.token],
-    queryFn: () => storeAdminApi.getTopFarmers(adminInfo?.token || ''),
+    queryKey: ['kapoorTopFarmers', adminInfo?.token],
+    queryFn: () => storeAdminApi.getKapoorTopFarmers(adminInfo?.token || ''),
     enabled: !!adminInfo?.token,
   });
 
-  const stockResponse = stockData as StockSummaryResponse;
+  const stockResponse = stockData as KapoorStockSummaryResponse;
+  const topFarmersResponse = topFarmersData as KapoorTopFarmersResponse;
   const stockSummary = stockResponse?.stockSummary || [];
   const stockTrend = stockResponse?.stockTrend || [];
   const totalBags = calculateTotalBags(stockSummary);
@@ -105,7 +125,7 @@ const ColdStorageSummaryScreen = () => {
   ];
 
   // Prepare data for top farmers chart (only total bags)
-  const topFarmersChartData = topFarmersData?.data?.map(farmer => ({
+  const topFarmersChartData = topFarmersResponse?.data?.map(farmer => ({
     name: farmer.farmerName,
     totalBags: farmer.totalBags
   })) || [];
@@ -260,7 +280,7 @@ const ColdStorageSummaryScreen = () => {
             </Card>
           )}
 
-          {topFarmersData?.data?.[0] && (
+          {topFarmersResponse?.data?.[0] && (
             <Card className="bg-gray-50/50 border border-gray-100 rounded-xl hover:shadow-sm transition-all duration-200">
               <CardContent className="p-4 sm:p-5 lg:p-6">
                 <div className="flex items-center justify-between">
@@ -274,13 +294,13 @@ const ColdStorageSummaryScreen = () => {
                       </p>
                     </div>
                     <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-1 truncate">
-                      {topFarmersData.data[0].farmerName}
+                      {topFarmersResponse.data[0].farmerName}
                     </h3>
                     <p className="text-xs sm:text-sm text-gray-500 mb-1">
-                      {topFarmersData.data[0].totalBags} {t('coldStorageSummary.bagsStored')}
+                      {topFarmersResponse.data[0].totalBags} {t('coldStorageSummary.bagsStored')}
                     </p>
                     <p className="text-xs text-green-600 font-medium truncate">
-                      {t('coldStorageSummary.specializesIn')} {Object.entries(topFarmersData.data[0].bagSummary)[0]?.[0]} ({Object.entries(topFarmersData.data[0].bagSummary)[0]?.[1]} {t('coldStorageSummary.bags')})
+                      {t('coldStorageSummary.specializesIn')} {Object.entries(topFarmersResponse.data[0].bagSummary)[0]?.[0]} ({Object.entries(topFarmersResponse.data[0].bagSummary)[0]?.[1]} {t('coldStorageSummary.bags')})
                     </p>
                   </div>
                 </div>
@@ -350,7 +370,7 @@ const ColdStorageSummaryScreen = () => {
           <VarietyDistributionChart data={finalVarietyDistribution} />
           <TopFarmersChart
             data={topFarmersChartData}
-            topFarmersData={topFarmersData}
+            topFarmersData={topFarmersResponse}
             totalBags={totalBags}
           />
         </div>

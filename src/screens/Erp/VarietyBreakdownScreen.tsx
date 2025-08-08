@@ -11,44 +11,38 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { StoreAdmin } from "@/utils/types";
 import { ArrowLeft, User, TrendingDown, TrendingUp } from "lucide-react";
 
-interface OrderDetail {
+interface KapoorOrderByVariety {
+  _id: string;
   variety: string;
-  bagSizes: {
+  dateOfEntry: string;
+  voucher: {
+    type: string;
+    voucherNumber: number;
+  };
+  remarks: string;
+  currentStockAtThatTime: number;
+  incomingBagSizes: Array<{
     quantity: {
       initialQuantity: number;
       currentQuantity: number;
     };
     size: string;
-  }[];
-  location: string;
-}
-
-interface Order {
-  voucher: {
-    type: string;
-    voucherNumber: number;
-  };
-  _id: string;
-  coldStorageId: string;
-  farmerId: {
-    _id: string;
+    location: string;
+  }>;
+  farmer: {
+    accountId: string;
     name: string;
-    address: string;
+    fatherName: string;
     mobileNumber: string;
+    address: string;
   };
-  dateOfSubmission: string;
-  fulfilled: boolean;
-  remarks: string;
-  currentStockAtThatTime: number;
-  orderDetails: OrderDetail[];
   createdAt: string;
-  updatedAt: string;
 }
 
-interface SearchByVarietyResponse {
+interface KapoorOrdersByVarietyResponse {
   status: string;
   message: string;
-  data: Order[];
+  data: KapoorOrderByVariety[];
 }
 
 interface BagData {
@@ -88,19 +82,17 @@ const VarietyBreakdownScreen = () => {
     isLoading,
     error,
   } = useQuery({
-    queryKey: ["searchByVariety", variety, adminInfo?.token],
+    queryKey: ["getKapoorOrderByVariety", variety, adminInfo?.token, adminInfo?._id],
     queryFn: () =>
-      storeAdminApi.searchByVariety(
-        {
-          variety: variety || "",
-          storeAdminId: adminInfo?._id || "",
-        },
-        adminInfo?.token || ""
+      storeAdminApi.getKapoorOrderByVariety(
+        adminInfo?.token || "",
+        variety || "",
+        adminInfo?._id || ""
       ),
     enabled: !!variety && !!adminInfo?.token && !!adminInfo?._id,
   });
 
-  const response = ordersData as SearchByVarietyResponse;
+  const response = ordersData as KapoorOrdersByVarietyResponse;
   const orders = response?.data || [];
 
   // Process data to show farmer-wise bag distribution
@@ -108,8 +100,8 @@ const VarietyBreakdownScreen = () => {
     const farmerMap = new Map<string, FarmerData>();
 
     orders.forEach((order) => {
-      const farmerId = order.farmerId._id;
-      const farmerName = order.farmerId.name;
+      const farmerId = order.farmer.accountId;
+      const farmerName = order.farmer.name;
 
       if (!farmerMap.has(farmerId)) {
         farmerMap.set(farmerId, {
@@ -122,22 +114,19 @@ const VarietyBreakdownScreen = () => {
 
       const farmer = farmerMap.get(farmerId)!;
 
-      order.orderDetails.forEach((detail) => {
-        if (detail.variety === variety) {
-          detail.bagSizes.forEach((bag) => {
-            const bagKey = bag.size;
-            if (!farmer.bags.has(bagKey)) {
-              farmer.bags.set(bagKey, { current: 0, initial: 0 });
-            }
-
-            const bagData = farmer.bags.get(bagKey)!;
-            bagData.current += bag.quantity.currentQuantity;
-            bagData.initial += bag.quantity.initialQuantity;
-
-            farmer.totalCurrent += bag.quantity.currentQuantity;
-            farmer.totalInitial += bag.quantity.initialQuantity;
-          });
+      // Process incoming bag sizes directly from the order
+      order.incomingBagSizes.forEach((bag) => {
+        const bagKey = bag.size;
+        if (!farmer.bags.has(bagKey)) {
+          farmer.bags.set(bagKey, { current: 0, initial: 0 });
         }
+
+        const bagData = farmer.bags.get(bagKey)!;
+        bagData.current += bag.quantity.currentQuantity;
+        bagData.initial += bag.quantity.initialQuantity;
+
+        farmer.totalCurrent += bag.quantity.currentQuantity;
+        farmer.totalInitial += bag.quantity.initialQuantity;
       });
     });
 
@@ -262,8 +251,7 @@ const VarietyBreakdownScreen = () => {
       </>
     );
   }
-  {typeof window !== "undefined" && (window as any).isWebview === undefined && ((window as any).isWebview = /wv|WebView|iPhone.*AppleWebKit(?!.*Safari)/i.test(window.navigator.userAgent))}
-  const isWebview = typeof window !== "undefined" ? (window as any).isWebview : false;
+  const isWebview = typeof window !== "undefined" ? Boolean((window as { isWebview?: boolean }).isWebview) : false;
   return (
     <>
       <TopBar
@@ -272,7 +260,7 @@ const VarietyBreakdownScreen = () => {
         setIsSidebarOpen={() => {}}
       />
       {/* Define isWebview based on window.navigator.userAgent or other logic */}
-     
+
 
       <div className="p-4 max-w-6xl mx-auto space-y-4 pb-20">
         {/* Header */}

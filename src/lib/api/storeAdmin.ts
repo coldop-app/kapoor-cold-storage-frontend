@@ -157,15 +157,6 @@ interface FarmersResponse {
   populatedFarmers: Farmer[];
 }
 
-interface TopFarmer {
-  farmerId: string;
-  farmerName: string;
-  totalBags: number;
-  bagSummary: {
-    [key: string]: number;
-  };
-}
-
 interface CountResponse {
   success: boolean;
   currentCount: number;
@@ -213,6 +204,84 @@ export interface FarmerProfile {
 interface FarmerProfilesResponse {
   status: string;
   data: FarmerProfile[];
+}
+
+interface KapoorColdStorageSummarySize {
+  size: string;
+  initialQuantity: number;
+  currentQuantity: number;
+  quantityRemoved?: number;
+}
+
+interface KapoorColdStorageSummaryVariety {
+  variety: string;
+  sizes: KapoorColdStorageSummarySize[];
+}
+
+interface KapoorStockTrend {
+  month: string;
+  totalStock: number;
+}
+
+interface KapoorColdStorageSummaryResponse {
+  status: string;
+  stockSummary: KapoorColdStorageSummaryVariety[];
+  stockTrend: KapoorStockTrend[];
+}
+
+interface KapoorTopFarmer {
+  _id: string;
+  totalBags: number;
+  varieties: string[];
+  bagSummary: {
+    [key: string]: number;
+  };
+  farmerId: string;
+  farmerName: string;
+  fatherName: string;
+  address: string;
+  mobileNumber: string;
+  accountId: string;
+}
+
+interface KapoorTopFarmersResponse {
+  status: string;
+  message: string;
+  data: KapoorTopFarmer[];
+}
+
+interface KapoorOrderByVariety {
+  _id: string;
+  variety: string;
+  dateOfEntry: string;
+  voucher: {
+    type: string;
+    voucherNumber: number;
+  };
+  remarks: string;
+  currentStockAtThatTime: number;
+  incomingBagSizes: Array<{
+    quantity: {
+      initialQuantity: number;
+      currentQuantity: number;
+    };
+    size: string;
+    location: string;
+  }>;
+  farmer: {
+    accountId: string;
+    name: string;
+    fatherName: string;
+    mobileNumber: string;
+    address: string;
+  };
+  createdAt: string;
+}
+
+interface KapoorOrdersByVarietyResponse {
+  status: string;
+  message: string;
+  data: KapoorOrderByVariety[];
 }
 
 export interface KapoorSingleFarmerIncomingOrdersResponse {
@@ -682,11 +751,7 @@ export const storeAdminApi = {
   },
 
   getTopFarmers: async (token: string) => {
-    const response = await axios.get<{
-      status: string;
-      message: string;
-      data: TopFarmer[];
-    }>(`${BASE_URL}/api/store-admin/top-farmers`, {
+    const response = await axios.get<KapoorTopFarmersResponse>(`${BASE_URL}/api/store-admin/top-farmers`, {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -776,6 +841,23 @@ export const storeAdminApi = {
   },
 
   /**
+   * Fetches the cold storage summary for the Kapoor cold storage.
+   * @param token JWT Bearer token for authentication
+   * @returns Promise<KapoorColdStorageSummaryResponse>
+   */
+  kapoorColdStorageSummary: async (token: string): Promise<KapoorColdStorageSummaryResponse> => {
+    const response = await axios.get<KapoorColdStorageSummaryResponse>(
+      `${BASE_URL}/api/store-admin/kapoor/cold-storage-summary`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+    return response.data;
+  },
+
+  /**
    * Fetches all incoming orders for a single farmer (Kapoor cold storage) by farmerAccountIds.
    * @param farmerAccountIds Array of farmer account IDs
    * @param token JWT Bearer token for authentication
@@ -815,7 +897,6 @@ export const storeAdminApi = {
     return response.data;
   },
 
-
   getKapoorDaybookOrders: async (
     token: string,
     type: string = "all",
@@ -826,6 +907,51 @@ export const storeAdminApi = {
       {
         params: { type, ...params },
         headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+    return response.data;
+  },
+
+  /**
+   * Fetches the top farmers for the Kapoor cold storage.
+   * @param token JWT Bearer token for authentication
+   * @returns Promise<KapoorTopFarmersResponse>
+   */
+  getKapoorTopFarmers: async (token: string): Promise<KapoorTopFarmersResponse> => {
+    const response = await axios.get<KapoorTopFarmersResponse>(
+      `${BASE_URL}/api/store-admin/kapoor/top-farmers`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+    return response.data;
+  },
+
+  /**
+   * Fetches orders by variety for the Kapoor cold storage.
+   * @param token JWT Bearer token for authentication
+   * @param variety The variety to search for
+   * @param storeAdminId The store admin ID
+   * @returns Promise<KapoorOrdersByVarietyResponse>
+   */
+  getKapoorOrderByVariety: async (
+    token: string,
+    variety: string,
+    storeAdminId: string
+  ): Promise<KapoorOrdersByVarietyResponse> => {
+    const response = await axios.post<KapoorOrdersByVarietyResponse>(
+      `${BASE_URL}/api/store-admin/kapoor/search-orders`,
+      {
+        variety,
+        storeAdminId,
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
       }
