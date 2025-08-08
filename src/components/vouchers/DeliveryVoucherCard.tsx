@@ -1,15 +1,15 @@
-import { useState, useMemo } from 'react';
-import { ChevronDown, ChevronUp, Share2 } from 'lucide-react';
+import { useState, useMemo } from "react";
+import { ChevronDown, ChevronUp, Share2 } from "lucide-react";
 
 interface WebViewMessage {
-  type: 'SHARE_CARD';
+  type: "SHARE_CARD";
   title: string;
   message: string;
 }
 
 // Add PDF message interface
 interface WebViewPDFMessage {
-  type: 'OPEN_PDF_NATIVE';
+  type: "OPEN_PDF_NATIVE";
   title: string;
   fileName: string;
   pdfData: string; // base64 encoded PDF
@@ -24,13 +24,13 @@ declare global {
     ReactNativeWebView?: ReactNativeWebViewType;
   }
 }
-import { Order, StoreAdmin } from '@/utils/types';
-import { Printer } from 'lucide-react';
-import { PDFViewer, pdf } from '@react-pdf/renderer';
-import OrderVoucherPDF from '../pdf/OrderVoucherPDF';
-import * as ReactDOM from 'react-dom/client';
-import { useSelector } from 'react-redux';
-import { RootState } from '@/store';
+import { Order, StoreAdmin } from "@/utils/types";
+import { Printer } from "lucide-react";
+import { PDFViewer, pdf } from "@react-pdf/renderer";
+import OrderVoucherPDF from "../pdf/OrderVoucherPDF";
+import * as ReactDOM from "react-dom/client";
+import { useSelector } from "react-redux";
+import { RootState } from "@/store";
 
 interface DeliveryVoucherCardProps {
   order: Order;
@@ -40,7 +40,9 @@ const DeliveryVoucherCard = ({ order }: DeliveryVoucherCardProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false); // Loading state for PDF generation
 
-  const adminInfo = useSelector((state: RootState) => state.auth.adminInfo) as StoreAdmin | null;
+  const adminInfo = useSelector(
+    (state: RootState) => state.auth.adminInfo
+  ) as StoreAdmin | null;
 
   // Sort bag sizes according to admin preferences using useMemo
   const sortBagSizes = useMemo(() => {
@@ -51,8 +53,8 @@ const DeliveryVoucherCard = ({ order }: DeliveryVoucherCardProps) => {
     // Create a map of normalized bag size names to their index in admin preferences
     const preferenceOrder = new Map(
       adminInfo.preferences.bagSizes.map((size, index) => [
-        size.toLowerCase().replace(/[-\s]/g, ''), // Normalize by removing hyphens and spaces
-        index
+        size.toLowerCase().replace(/[-\s]/g, ""), // Normalize by removing hyphens and spaces
+        index,
       ])
     );
 
@@ -62,8 +64,8 @@ const DeliveryVoucherCard = ({ order }: DeliveryVoucherCardProps) => {
 
       return [...bagSizes].sort((a, b) => {
         // Normalize the bag size names for comparison
-        const aNormalized = a.toLowerCase().replace(/[-\s]/g, '');
-        const bNormalized = b.toLowerCase().replace(/[-\s]/g, '');
+        const aNormalized = a.toLowerCase().replace(/[-\s]/g, "");
+        const bNormalized = b.toLowerCase().replace(/[-\s]/g, "");
 
         const aIndex = preferenceOrder.get(aNormalized);
         const bIndex = preferenceOrder.get(bNormalized);
@@ -89,7 +91,7 @@ const DeliveryVoucherCard = ({ order }: DeliveryVoucherCardProps) => {
 
   const shareCard = (cardData: Order) => {
     const message: WebViewMessage = {
-      type: 'SHARE_CARD',
+      type: "SHARE_CARD",
       title: "Delivery Voucher " + cardData.voucher.voucherNumber,
       message: JSON.stringify(cardData),
     };
@@ -99,26 +101,30 @@ const DeliveryVoucherCard = ({ order }: DeliveryVoucherCardProps) => {
 
   // Calculate lot number (total quantity removed)
   const calculateLotNo = () => {
-    return order.orderDetails.reduce((total, detail) =>
-      total + detail.bagSizes.reduce((sum, bag) =>
-        sum + (bag.quantityRemoved || 0), 0
-      ), 0
+    return order.orderDetails.reduce(
+      (total, detail) =>
+        total +
+        detail.bagSizes.reduce(
+          (sum, bag) => sum + (bag.quantityRemoved || 0),
+          0
+        ),
+      0
     );
   };
 
   // Sort bag sizes for detailed breakdown table
   const sortedOrderDetails = useMemo(() => {
-    return order.orderDetails.map(detail => ({
+    return order.orderDetails.map((detail) => ({
       ...detail,
-      bagSizes: sortBagSizes(detail.bagSizes.map(bag => bag.size)).map(sortedSize =>
-        detail.bagSizes.find(bag => bag.size === sortedSize)!
-      )
+      bagSizes: sortBagSizes(detail.bagSizes.map((bag) => bag.size)).map(
+        (sortedSize) => detail.bagSizes.find((bag) => bag.size === sortedSize)!
+      ),
     }));
   }, [order.orderDetails, sortBagSizes]);
 
   const handlePrint = async () => {
     if (!adminInfo) {
-      alert('Admin information not available for PDF generation');
+      alert("Admin information not available for PDF generation");
       return;
     }
 
@@ -127,52 +133,54 @@ const DeliveryVoucherCard = ({ order }: DeliveryVoucherCardProps) => {
       setIsGeneratingPDF(true);
 
       try {
-        console.log('Starting PDF generation for Delivery Voucher...');
+        console.log("Starting PDF generation for Delivery Voucher...");
 
         const pdfDoc = <OrderVoucherPDF order={order} adminInfo={adminInfo} />;
 
         // Generate PDF as blob
         const pdfBlob = await pdf(pdfDoc).toBlob();
-        console.log('PDF blob generated, size:', pdfBlob.size, 'bytes');
+        console.log("PDF blob generated, size:", pdfBlob.size, "bytes");
 
         // Convert blob to base64
         const reader = new FileReader();
-        reader.onload = function() {
-          const base64Data = (reader.result as string).split(',')[1]; // Remove data:application/pdf;base64, prefix
+        reader.onload = function () {
+          const base64Data = (reader.result as string).split(",")[1]; // Remove data:application/pdf;base64, prefix
 
-          const fileName = `Delivery_Voucher_${order.voucher.voucherNumber}_${new Date().toISOString().split('T')[0]}.pdf`;
+          const fileName = `Delivery_Voucher_${order.voucher.voucherNumber}_${
+            new Date().toISOString().split("T")[0]
+          }.pdf`;
 
           const message: WebViewPDFMessage = {
-            type: 'OPEN_PDF_NATIVE',
+            type: "OPEN_PDF_NATIVE",
             title: `Delivery Voucher ${order.voucher.voucherNumber}`,
             fileName: fileName,
-            pdfData: base64Data
+            pdfData: base64Data,
           };
 
           window.ReactNativeWebView?.postMessage(JSON.stringify(message));
-          console.log('PDF data sent to React Native');
+          console.log("PDF data sent to React Native");
 
           // Reset loading state after successful send
           setIsGeneratingPDF(false);
         };
 
-        reader.onerror = function() {
-          console.error('Error converting PDF to base64');
-          alert('Error preparing PDF for native viewer. Please try again.');
+        reader.onerror = function () {
+          console.error("Error converting PDF to base64");
+          alert("Error preparing PDF for native viewer. Please try again.");
           // Reset loading state on error
           setIsGeneratingPDF(false);
         };
 
         reader.readAsDataURL(pdfBlob);
       } catch (error) {
-        console.error('Error generating PDF:', error);
-        alert('Failed to generate PDF. Please try again.');
+        console.error("Error generating PDF:", error);
+        alert("Failed to generate PDF. Please try again.");
         // Reset loading state on error
         setIsGeneratingPDF(false);
       }
     } else {
       // Handle printing in web browser (existing PDF functionality)
-      const printWindow = window.open('', '_blank');
+      const printWindow = window.open("", "_blank");
       if (printWindow && adminInfo) {
         printWindow.document.write(`
           <html>
@@ -187,7 +195,7 @@ const DeliveryVoucherCard = ({ order }: DeliveryVoucherCardProps) => {
         `);
 
         // Render PDF viewer in the new window
-        const root = printWindow.document.getElementById('root');
+        const root = printWindow.document.getElementById("root");
         if (root) {
           ReactDOM.createRoot(root).render(
             <PDFViewer width="100%" height="100%">
@@ -252,15 +260,24 @@ const DeliveryVoucherCard = ({ order }: DeliveryVoucherCardProps) => {
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 bg-rose-500 rounded-full flex-shrink-0"></div>
             <span className="text-sm font-medium text-gray-900">
-              Delivery Voucher: <span className="text-rose-600">{order.voucher.voucherNumber}</span>
+              Delivery Voucher:{" "}
+              <span className="text-rose-600">
+                {order.voucher.voucherNumber}
+              </span>
             </span>
           </div>
           <div className="flex items-center gap-2">
             <div className="text-xs text-gray-600 bg-gray-50 px-2 py-1 rounded-md">
-              Date: <span className="font-medium text-gray-900">{order.dateOfExtraction || 'N/A'}</span>
+              Date:{" "}
+              <span className="font-medium text-gray-900">
+                {order.dateOfExtraction || "N/A"}
+              </span>
             </div>
             <div className="text-xs text-gray-600 bg-gray-50 px-2 py-1 rounded-md">
-              C.Stock: <span className="font-medium text-gray-900">{order.currentStockAtThatTime}</span>
+              C.Stock:{" "}
+              <span className="font-medium text-gray-900">
+                {order.currentStockAtThatTime}
+              </span>
             </div>
           </div>
         </div>
@@ -273,19 +290,36 @@ const DeliveryVoucherCard = ({ order }: DeliveryVoucherCardProps) => {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-x-3 gap-y-3">
               <div className="min-w-0">
                 <span className="text-xs text-gray-500 block">Variety</span>
-                <p className="text-sm font-medium text-gray-900 truncate">{order.orderDetails[0]?.variety}</p>
+                <p className="text-sm font-medium text-gray-900 truncate">
+                  {order.orderDetails[0]?.variety}
+                </p>
               </div>
               <div className="min-w-0">
                 <span className="text-xs text-gray-500 block">Lot No</span>
-                <p className="text-sm font-medium text-gray-900">{order.voucher.voucherNumber}/{order.orderDetails.reduce((total, detail) => total + detail.bagSizes.reduce((sum, bag) => sum + (bag.quantityRemoved || 0), 0), 0)}</p>
+                <p className="text-sm font-medium text-gray-900">
+                  {order.farmerId.farmerId}/
+                  {order.orderDetails.reduce(
+                    (total, detail) =>
+                      total +
+                      detail.bagSizes.reduce(
+                        (sum, bag) => sum + (bag.quantityRemoved || 0),
+                        0
+                      ),
+                    0
+                  )}
+                </p>
               </div>
               <div className="min-w-0">
                 <span className="text-xs text-gray-500 block">Party Name</span>
-                <p className="text-sm font-medium text-gray-900 truncate">{order.farmerId.name}</p>
+                <p className="text-sm font-medium text-gray-900 truncate">
+                  {order.farmerId.name}
+                </p>
               </div>
               <div className="min-w-0">
                 <span className="text-xs text-gray-500 block">Acc No</span>
-                <p className="text-sm font-medium text-gray-900">{order.farmerId.farmerId}</p>
+                <p className="text-sm font-medium text-gray-900">
+                  {order.farmerId.farmerId}
+                </p>
               </div>
             </div>
           </div>
@@ -299,7 +333,7 @@ const DeliveryVoucherCard = ({ order }: DeliveryVoucherCardProps) => {
                 disabled={isWebView() && isGeneratingPDF}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500/20 transition-all duration-200 flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {(isWebView() && isGeneratingPDF) ? (
+                {isWebView() && isGeneratingPDF ? (
                   <>
                     <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-gray-600"></div>
                     <span className="hidden xs:inline">Generating...</span>
@@ -349,222 +383,360 @@ const DeliveryVoucherCard = ({ order }: DeliveryVoucherCardProps) => {
           <div className="p-3 sm:p-4 lg:p-5 space-y-6">
             {/* Farmer Details */}
             <div className="bg-gray-50/50 rounded-xl p-4 border border-gray-100">
-              <h3 className="text-sm font-medium text-gray-900 mb-4">Farmer Details</h3>
+              <h3 className="text-sm font-medium text-gray-900 mb-4">
+                Farmer Details
+              </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <span className="text-xs text-gray-500 block mb-1">Address</span>
-                  <p className="text-sm font-medium text-gray-900">{order.farmerId.address || 'N/A'}</p>
+                  <span className="text-xs text-gray-500 block mb-1">
+                    Address
+                  </span>
+                  <p className="text-sm font-medium text-gray-900">
+                    {order.farmerId.address || "N/A"}
+                  </p>
                 </div>
                 <div>
-                  <span className="text-xs text-gray-500 block mb-1">Mobile Number</span>
-                  <p className="text-sm font-medium text-gray-900">{order.farmerId.mobileNumber || 'N/A'}</p>
+                  <span className="text-xs text-gray-500 block mb-1">
+                    Mobile Number
+                  </span>
+                  <p className="text-sm font-medium text-gray-900">
+                    {order.farmerId.mobileNumber || "N/A"}
+                  </p>
                 </div>
               </div>
             </div>
 
             {/* Net Outgoing Details Summary */}
             <div className="bg-gray-50/50 rounded-xl p-4 border border-gray-100">
-              <h3 className="text-sm font-medium text-gray-900 mb-4">Net Outgoing Details</h3>
+              <h3 className="text-sm font-medium text-gray-900 mb-4">
+                Net Outgoing Details
+              </h3>
 
-                             {/* Mobile View - Stacked Layout */}
-               <div className="block sm:hidden space-y-3">
-                 {sortBagSizes(Array.from(new Set(order.orderDetails.flatMap(d => d.bagSizes.map(b => b.size))))).map((bagSize, idx) => {
-                   const totalRemoved = order.orderDetails.reduce((total, detail) =>
-                     total + detail.bagSizes.filter(bag => bag.size === bagSize).reduce((sum, bag) =>
-                       sum + (bag.quantityRemoved || 0), 0
-                     ), 0
-                   );
+              {/* Mobile View - Stacked Layout */}
+              <div className="block sm:hidden space-y-3">
+                {sortBagSizes(
+                  Array.from(
+                    new Set(
+                      order.orderDetails.flatMap((d) =>
+                        d.bagSizes.map((b) => b.size)
+                      )
+                    )
+                  )
+                ).map((bagSize, idx) => {
+                  const totalRemoved = order.orderDetails.reduce(
+                    (total, detail) =>
+                      total +
+                      detail.bagSizes
+                        .filter((bag) => bag.size === bagSize)
+                        .reduce(
+                          (sum, bag) => sum + (bag.quantityRemoved || 0),
+                          0
+                        ),
+                    0
+                  );
 
-                   return (
-                     <div key={idx} className="bg-white rounded-lg p-3 border border-gray-100">
-                       <div className="flex justify-between items-center">
-                         <span className="text-sm font-medium text-gray-900">{bagSize}</span>
-                         <span className="text-sm font-medium text-rose-600">{totalRemoved}</span>
-                       </div>
-                     </div>
-                   );
-                 })}
+                  return (
+                    <div
+                      key={idx}
+                      className="bg-white rounded-lg p-3 border border-gray-100"
+                    >
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium text-gray-900">
+                          {bagSize}
+                        </span>
+                        <span className="text-sm font-medium text-rose-600">
+                          {totalRemoved}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
 
-                 {/* Total Row for Mobile */}
-                 <div className="bg-rose-50 rounded-lg p-3 border border-rose-200">
-                   <div className="flex justify-between items-center">
-                     <span className="text-sm font-semibold text-gray-900">Total</span>
-                     <span className="text-sm font-semibold text-rose-600">{calculateLotNo()}</span>
-                   </div>
-                 </div>
-               </div>
+                {/* Total Row for Mobile */}
+                <div className="bg-rose-50 rounded-lg p-3 border border-rose-200">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-semibold text-gray-900">
+                      Total
+                    </span>
+                    <span className="text-sm font-semibold text-rose-600">
+                      {calculateLotNo()}
+                    </span>
+                  </div>
+                </div>
+              </div>
 
-               {/* Desktop View - Table Layout */}
-               <div className="hidden sm:block">
-                 <div className="overflow-x-auto">
-                   <table className="w-full text-sm border-collapse">
-                     <thead>
-                       <tr className="bg-gray-50">
-                         {sortBagSizes(Array.from(new Set(order.orderDetails.flatMap(d => d.bagSizes.map(b => b.size))))).map((bagSize, idx) => (
-                           <th key={idx} className="text-center py-3 px-3 font-medium text-gray-900 border-b border-gray-200">
-                             {bagSize}
-                           </th>
-                         ))}
-                         <th className="text-center py-3 px-3 font-medium text-gray-900 border-b border-gray-200">
-                           Total
-                         </th>
-                       </tr>
-                     </thead>
-                     <tbody>
-                       <tr className="border-b border-gray-100">
-                         {sortBagSizes(Array.from(new Set(order.orderDetails.flatMap(d => d.bagSizes.map(b => b.size))))).map((bagSize, idx) => {
-                           const totalRemoved = order.orderDetails.reduce((total, detail) =>
-                             total + detail.bagSizes.filter(bag => bag.size === bagSize).reduce((sum, bag) =>
-                               sum + (bag.quantityRemoved || 0), 0
-                             ), 0
-                           );
+              {/* Desktop View - Table Layout */}
+              <div className="hidden sm:block">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm border-collapse">
+                    <thead>
+                      <tr className="bg-gray-50">
+                        {sortBagSizes(
+                          Array.from(
+                            new Set(
+                              order.orderDetails.flatMap((d) =>
+                                d.bagSizes.map((b) => b.size)
+                              )
+                            )
+                          )
+                        ).map((bagSize, idx) => (
+                          <th
+                            key={idx}
+                            className="text-center py-3 px-3 font-medium text-gray-900 border-b border-gray-200"
+                          >
+                            {bagSize}
+                          </th>
+                        ))}
+                        <th className="text-center py-3 px-3 font-medium text-gray-900 border-b border-gray-200">
+                          Total
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="border-b border-gray-100">
+                        {sortBagSizes(
+                          Array.from(
+                            new Set(
+                              order.orderDetails.flatMap((d) =>
+                                d.bagSizes.map((b) => b.size)
+                              )
+                            )
+                          )
+                        ).map((bagSize, idx) => {
+                          const totalRemoved = order.orderDetails.reduce(
+                            (total, detail) =>
+                              total +
+                              detail.bagSizes
+                                .filter((bag) => bag.size === bagSize)
+                                .reduce(
+                                  (sum, bag) =>
+                                    sum + (bag.quantityRemoved || 0),
+                                  0
+                                ),
+                            0
+                          );
 
-                           return (
-                             <td key={idx} className="py-3 px-3 text-center">
-                               <span className="font-medium text-rose-600">{totalRemoved}</span>
-                             </td>
-                           );
-                         })}
-                         {/* Total */}
-                         <td className="py-3 px-3 text-center">
-                           <span className="font-semibold text-rose-600">{calculateLotNo()}</span>
-                         </td>
-                       </tr>
-                     </tbody>
-                   </table>
-                 </div>
-               </div>
+                          return (
+                            <td key={idx} className="py-3 px-3 text-center">
+                              <span className="font-medium text-rose-600">
+                                {totalRemoved}
+                              </span>
+                            </td>
+                          );
+                        })}
+                        {/* Total */}
+                        <td className="py-3 px-3 text-center">
+                          <span className="font-semibold text-rose-600">
+                            {calculateLotNo()}
+                          </span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
 
-                         {/* Detailed Breakdown */}
-             <div className="bg-gray-50/50 rounded-xl p-4 border border-gray-100">
-               <h3 className="text-sm font-medium text-gray-900 mb-4">Detailed Breakdown</h3>
+            {/* Detailed Breakdown */}
+            <div className="bg-gray-50/50 rounded-xl p-4 border border-gray-100">
+              <h3 className="text-sm font-medium text-gray-900 mb-4">
+                Detailed Breakdown
+              </h3>
 
-               {/* Mobile View - Stacked Cards */}
-               <div className="block sm:hidden space-y-3">
-                 {sortedOrderDetails.map((detail, detailIndex) => (
-                   detail.bagSizes.map((bagSize, bagIndex) => {
-                     const incomingBagSize = detail.incomingOrder?.incomingBagSizes.find(
-                       b => b.size === bagSize.size
-                     );
-                     const currentQuantity = incomingBagSize?.quantity?.currentQuantity || 0;
-                     const issuedQuantity = bagSize.quantityRemoved || 0;
-                     const availableQuantity = currentQuantity - issuedQuantity;
+              {/* Mobile View - Stacked Cards */}
+              <div className="block sm:hidden space-y-3">
+                {sortedOrderDetails.map((detail, detailIndex) =>
+                  detail.bagSizes.map((bagSize, bagIndex) => {
+                    const incomingBagSize =
+                      detail.incomingOrder?.incomingBagSizes.find(
+                        (b) => b.size === bagSize.size
+                      );
+                    const currentQuantity =
+                      incomingBagSize?.quantity?.currentQuantity || 0;
+                    const issuedQuantity = bagSize.quantityRemoved || 0;
+                    const availableQuantity = currentQuantity - issuedQuantity;
 
-                     return (
-                       <div key={`${detailIndex}-${bagIndex}`} className="bg-white rounded-lg p-3 border border-gray-100">
-                         <div className="space-y-2">
-                           <div className="flex justify-between items-center">
-                             <span className="text-sm font-medium text-gray-900">{bagSize.size}</span>
-                             <div className="flex items-center gap-2">
-                               <div className="w-1.5 h-1.5 bg-primary rounded-full"></div>
-                               <span className="text-xs font-medium text-gray-900">
-                                 {detail.incomingOrder?.voucher.voucherNumber || '—'}
-                               </span>
-                             </div>
-                           </div>
-                           <div className="text-xs text-gray-600">
-                             <span className="font-medium">Address:</span> {bagSize.location || detail.incomingOrder?.location || 'N/A'}
-                           </div>
-                           <div className="grid grid-cols-3 gap-2 text-xs">
-                             <div className="text-center">
-                               <span className="block text-gray-500">Current Qty</span>
-                               <span className="font-medium text-gray-900">{currentQuantity}</span>
-                             </div>
-                             <div className="text-center">
-                               <span className="block text-gray-500">Qty Issued</span>
-                               <span className="font-medium text-rose-600">{issuedQuantity}</span>
-                             </div>
-                             <div className="text-center">
-                               <span className="block text-gray-500">Available</span>
-                               <span className="font-medium text-primary">{availableQuantity}</span>
-                             </div>
-                           </div>
-                         </div>
-                       </div>
-                     );
-                   })
-                 ))}
-               </div>
+                    return (
+                      <div
+                        key={`${detailIndex}-${bagIndex}`}
+                        className="bg-white rounded-lg p-3 border border-gray-100"
+                      >
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm font-medium text-gray-900">
+                              {bagSize.size}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <div className="w-1.5 h-1.5 bg-primary rounded-full"></div>
+                              <span className="text-xs font-medium text-gray-900">
+                                {detail.incomingOrder?.voucher.voucherNumber ||
+                                  "—"}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="text-xs text-gray-600">
+                            <span className="font-medium">Address:</span>{" "}
+                            {bagSize.location ||
+                              detail.incomingOrder?.location ||
+                              "N/A"}
+                          </div>
+                          <div className="grid grid-cols-3 gap-2 text-xs">
+                            <div className="text-center">
+                              <span className="block text-gray-500">
+                                Current Qty
+                              </span>
+                              <span className="font-medium text-gray-900">
+                                {currentQuantity}
+                              </span>
+                            </div>
+                            <div className="text-center">
+                              <span className="block text-gray-500">
+                                Qty Issued
+                              </span>
+                              <span className="font-medium text-rose-600">
+                                {issuedQuantity}
+                              </span>
+                            </div>
+                            <div className="text-center">
+                              <span className="block text-gray-500">
+                                Available
+                              </span>
+                              <span className="font-medium text-primary">
+                                {availableQuantity}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
 
-               {/* Desktop View - Table Layout */}
-               <div className="hidden sm:block">
-                 <div className="overflow-x-auto rounded-xl border border-gray-100">
-                   <table className="w-full text-sm">
-                     <thead>
-                       <tr className="bg-gray-50/50">
-                         <th className="text-left py-3 px-4 font-medium text-gray-900">Bag Type</th>
-                         <th className="text-left py-3 px-4 font-medium text-gray-900">Address</th>
-                         <th className="text-left py-3 px-4 font-medium text-gray-900">R. Voucher</th>
-                         <th className="text-right py-3 px-4 font-medium text-gray-900">Current Qty</th>
-                         <th className="text-right py-3 px-4 font-medium text-gray-900">Qty Issued</th>
-                         <th className="text-right py-3 px-4 font-medium text-gray-900">Available</th>
-                       </tr>
-                     </thead>
-                     <tbody className="divide-y divide-gray-100">
-                       {sortedOrderDetails.map((detail, detailIndex) => (
-                         detail.bagSizes.map((bagSize, bagIndex) => {
-                           console.log('Debug - Looking for bag size:', bagSize.size);
-                           console.log('Debug - Available incoming bag sizes:', detail.incomingOrder?.incomingBagSizes);
+              {/* Desktop View - Table Layout */}
+              <div className="hidden sm:block">
+                <div className="overflow-x-auto rounded-xl border border-gray-100">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-50/50">
+                        <th className="text-left py-3 px-4 font-medium text-gray-900">
+                          Bag Type
+                        </th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-900">
+                          Address
+                        </th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-900">
+                          R. Voucher
+                        </th>
+                        <th className="text-right py-3 px-4 font-medium text-gray-900">
+                          Current Qty
+                        </th>
+                        <th className="text-right py-3 px-4 font-medium text-gray-900">
+                          Qty Issued
+                        </th>
+                        <th className="text-right py-3 px-4 font-medium text-gray-900">
+                          Available
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {sortedOrderDetails.map((detail, detailIndex) =>
+                        detail.bagSizes.map((bagSize, bagIndex) => {
+                          console.log(
+                            "Debug - Looking for bag size:",
+                            bagSize.size
+                          );
+                          console.log(
+                            "Debug - Available incoming bag sizes:",
+                            detail.incomingOrder?.incomingBagSizes
+                          );
 
-                           const incomingBagSize = detail.incomingOrder?.incomingBagSizes.find(
-                             b => b.size === bagSize.size
-                           );
+                          const incomingBagSize =
+                            detail.incomingOrder?.incomingBagSizes.find(
+                              (b) => b.size === bagSize.size
+                            );
 
-                           // Debug logging
-                           console.log('Debug - Bag Size:', bagSize.size);
-                           console.log('Debug - Incoming Bag Size:', incomingBagSize);
-                           console.log('Debug - Detail:', detail);
-                           console.log('Debug - Incoming Order:', detail.incomingOrder);
+                          // Debug logging
+                          console.log("Debug - Bag Size:", bagSize.size);
+                          console.log(
+                            "Debug - Incoming Bag Size:",
+                            incomingBagSize
+                          );
+                          console.log("Debug - Detail:", detail);
+                          console.log(
+                            "Debug - Incoming Order:",
+                            detail.incomingOrder
+                          );
 
-                           const currentQuantity = incomingBagSize?.quantity?.currentQuantity || 0;
-                           const issuedQuantity = bagSize.quantityRemoved || 0;
-                           const availableQuantity = currentQuantity - issuedQuantity;
+                          const currentQuantity =
+                            incomingBagSize?.quantity?.currentQuantity || 0;
+                          const issuedQuantity = bagSize.quantityRemoved || 0;
+                          const availableQuantity =
+                            currentQuantity - issuedQuantity;
 
-                           console.log('Debug - Current Qty:', currentQuantity);
-                           console.log('Debug - Issued Qty:', issuedQuantity);
-                           console.log('Debug - Available Qty:', availableQuantity);
+                          console.log("Debug - Current Qty:", currentQuantity);
+                          console.log("Debug - Issued Qty:", issuedQuantity);
+                          console.log(
+                            "Debug - Available Qty:",
+                            availableQuantity
+                          );
 
-                           return (
-                             <tr key={`${detailIndex}-${bagIndex}`} className="hover:bg-gray-50/50 transition-colors">
-                               <td className="py-3 px-4 font-medium text-gray-900">{bagSize.size}</td>
-                               <td className="py-3 px-4 text-gray-700">
-                                 {bagSize.location || detail.incomingOrder?.location || 'N/A'}
-                               </td>
-                               <td className="py-3 px-4">
-                                 {detail.incomingOrder ? (
-                                   <div className="flex items-center gap-2">
-                                     <div className="w-1.5 h-1.5 bg-primary rounded-full"></div>
-                                     <span className="text-sm font-medium text-gray-900">
-                                       {detail.incomingOrder.voucher.voucherNumber}
-                                     </span>
-                                   </div>
-                                 ) : (
-                                   <span className="text-gray-400">—</span>
-                                 )}
-                               </td>
-                               <td className="py-3 px-4 text-right text-gray-700">{currentQuantity}</td>
-                               <td className="py-3 px-4 text-right text-rose-600 font-medium">
-                                 {issuedQuantity}
-                               </td>
-                               <td className="py-3 px-4 text-right text-primary font-medium">
-                                 {availableQuantity}
-                               </td>
-                             </tr>
-                           );
-                         })
-                       ))}
-                     </tbody>
-                   </table>
-                 </div>
-               </div>
-             </div>
+                          return (
+                            <tr
+                              key={`${detailIndex}-${bagIndex}`}
+                              className="hover:bg-gray-50/50 transition-colors"
+                            >
+                              <td className="py-3 px-4 font-medium text-gray-900">
+                                {bagSize.size}
+                              </td>
+                              <td className="py-3 px-4 text-gray-700">
+                                {bagSize.location ||
+                                  detail.incomingOrder?.location ||
+                                  "N/A"}
+                              </td>
+                              <td className="py-3 px-4">
+                                {detail.incomingOrder ? (
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-1.5 h-1.5 bg-primary rounded-full"></div>
+                                    <span className="text-sm font-medium text-gray-900">
+                                      {
+                                        detail.incomingOrder.voucher
+                                          .voucherNumber
+                                      }
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span className="text-gray-400">—</span>
+                                )}
+                              </td>
+                              <td className="py-3 px-4 text-right text-gray-700">
+                                {currentQuantity}
+                              </td>
+                              <td className="py-3 px-4 text-right text-rose-600 font-medium">
+                                {issuedQuantity}
+                              </td>
+                              <td className="py-3 px-4 text-right text-primary font-medium">
+                                {availableQuantity}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
 
             {/* Remarks Section */}
             {order.remarks && (
               <div className="bg-yellow-50/50 rounded-xl p-4 border border-yellow-100">
-                <h3 className="text-sm font-medium text-gray-900 mb-2">Remarks</h3>
-                <p className="text-sm text-gray-700 leading-relaxed break-words">{order.remarks}</p>
+                <h3 className="text-sm font-medium text-gray-900 mb-2">
+                  Remarks
+                </h3>
+                <p className="text-sm text-gray-700 leading-relaxed break-words">
+                  {order.remarks}
+                </p>
               </div>
             )}
           </div>

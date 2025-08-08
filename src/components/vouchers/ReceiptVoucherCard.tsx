@@ -484,7 +484,7 @@ ${sortedBagSizesWithLocation
               <div className="min-w-0">
                 <span className="text-xs text-gray-500 block">Lot No</span>
                 <p className="text-sm font-medium text-gray-900">
-                  {order.voucher.voucherNumber}/{calculateLotNo()}
+                  {getFarmerInfo(order).farmerId}/{calculateLotNo()}
                 </p>
               </div>
               <div className="min-w-0">
