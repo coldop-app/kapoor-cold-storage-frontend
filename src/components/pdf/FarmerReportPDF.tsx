@@ -411,36 +411,52 @@ const FarmerReportPDF: React.FC<FarmerReportPDFProps> = ({
 
     // First create all entries
     receiptOrders.forEach((order) => {
-      // Initialize quantities map for all bag sizes
+      // Initialize quantities map for all bag sizes according to admin preferences
       const quantities: { [bagSize: string]: number } = {};
-      bagSizes.forEach((size) => {
+      adminInfo.preferences?.bagSizes.forEach((size) => {
         quantities[size] = 0;
       });
 
       // Create separate entries for each unique location-variety combination
       order.orderDetails.forEach((detail) => {
+        // Create a normalized map of bag sizes to match with admin preferences
+        const normalizedBagSizes = new Map(
+          detail.bagSizes.map((bag) => [
+            bag.size.toLowerCase().replace(/[-\s]/g, ""),
+            bag,
+          ])
+        );
+
         // Group bags by location
         const bagsByLocation = new Map<
           string,
           { size: string; quantity: number }[]
         >();
 
-        detail.bagSizes.forEach((bag) => {
-          const location = bag.location || detail.location || "-";
-          if (!bagsByLocation.has(location)) {
-            bagsByLocation.set(location, []);
+        // Go through admin preferred bag sizes first
+        adminInfo.preferences?.bagSizes.forEach((preferredSize) => {
+          const normalizedSize = preferredSize
+            .toLowerCase()
+            .replace(/[-\s]/g, "");
+          const matchingBag = normalizedBagSizes.get(normalizedSize);
+
+          if (matchingBag) {
+            const location = matchingBag.location || detail.location || "-";
+            if (!bagsByLocation.has(location)) {
+              bagsByLocation.set(location, []);
+            }
+            bagsByLocation.get(location)?.push({
+              size: preferredSize, // Use the preferred size name
+              quantity: matchingBag.quantity?.initialQuantity || 0,
+            });
           }
-          bagsByLocation.get(location)?.push({
-            size: bag.size,
-            quantity: bag.quantity?.initialQuantity || 0,
-          });
         });
 
         // Create an entry for each location
         bagsByLocation.forEach((bags, location) => {
-          // Initialize quantities for this location
+          // Initialize quantities according to admin preferences
           const locationQuantities: { [bagSize: string]: number } = {};
-          bagSizes.forEach((size) => {
+          adminInfo.preferences?.bagSizes.forEach((size) => {
             locationQuantities[size] = 0;
           });
 
@@ -487,36 +503,52 @@ const FarmerReportPDF: React.FC<FarmerReportPDFProps> = ({
 
     // First create all entries
     deliveryOrders.forEach((order) => {
-      // Initialize quantities map for all bag sizes
+      // Initialize quantities map for all bag sizes according to admin preferences
       const quantities: { [bagSize: string]: number } = {};
-      bagSizes.forEach((size) => {
+      adminInfo.preferences?.bagSizes.forEach((size) => {
         quantities[size] = 0;
       });
 
       // Create separate entries for each unique location-variety combination
       order.orderDetails.forEach((detail) => {
+        // Create a normalized map of bag sizes to match with admin preferences
+        const normalizedBagSizes = new Map(
+          detail.bagSizes.map((bag) => [
+            bag.size.toLowerCase().replace(/[-\s]/g, ""),
+            bag,
+          ])
+        );
+
         // Group bags by location
         const bagsByLocation = new Map<
           string,
           { size: string; quantity: number }[]
         >();
 
-        detail.bagSizes.forEach((bag) => {
-          const location = bag.location || detail.location || "-";
-          if (!bagsByLocation.has(location)) {
-            bagsByLocation.set(location, []);
+        // Go through admin preferred bag sizes first
+        adminInfo.preferences?.bagSizes.forEach((preferredSize) => {
+          const normalizedSize = preferredSize
+            .toLowerCase()
+            .replace(/[-\s]/g, "");
+          const matchingBag = normalizedBagSizes.get(normalizedSize);
+
+          if (matchingBag) {
+            const location = matchingBag.location || detail.location || "-";
+            if (!bagsByLocation.has(location)) {
+              bagsByLocation.set(location, []);
+            }
+            bagsByLocation.get(location)?.push({
+              size: preferredSize, // Use the preferred size name
+              quantity: matchingBag.quantityRemoved || 0,
+            });
           }
-          bagsByLocation.get(location)?.push({
-            size: bag.size,
-            quantity: bag.quantityRemoved || 0,
-          });
         });
 
         // Create an entry for each location
         bagsByLocation.forEach((bags, location) => {
-          // Initialize quantities for this location
+          // Initialize quantities according to admin preferences
           const locationQuantities: { [bagSize: string]: number } = {};
-          bagSizes.forEach((size) => {
+          adminInfo.preferences?.bagSizes.forEach((size) => {
             locationQuantities[size] = 0;
           });
 

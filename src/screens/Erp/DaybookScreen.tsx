@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import TopBar from "@/components/common/Topbar/Topbar";
 import { storeAdminApi } from "@/lib/api/storeAdmin";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store";
 import {
@@ -37,6 +37,10 @@ const DaybookScreen = () => {
   const [sortBy, setSortBy] = useState<SortOrder>("latest");
   const [type, setType] = useState<OrderType>("all");
   const [currentPage, setCurrentPage] = useState(1);
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [searchReceiptNumber, setSearchReceiptNumber] = useState<string>("");
   const adminInfo = useSelector((state: RootState) => state.auth.adminInfo);

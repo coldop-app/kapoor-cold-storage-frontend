@@ -651,31 +651,35 @@ ${sortedBagSizesWithLocation
                   <div className="min-w-full">
                     <table className="w-full text-sm border-collapse">
                       <thead>
-                        <tr className="bg-gray-50">
-                          <th className="text-center py-3 px-3 font-medium text-gray-900 border-b border-gray-200">
-                            Bag Size
+                        <tr>
+                          <th className="py-3 px-3 font-medium text-gray-900 border-b border-gray-200 w-32">
+                            Type
                           </th>
+                          {sortedBagSizesWithLocation.map((bagSize, idx) => (
+                            <th
+                              key={idx}
+                              className="text-center py-3 px-3 font-medium text-gray-900 border-b border-gray-200"
+                            >
+                              {formatBagSizeName(bagSize.size)}
+                            </th>
+                          ))}
                           <th className="text-center py-3 px-3 font-medium text-gray-900 border-b border-gray-200">
-                            Quantity
-                          </th>
-                          <th className="text-center py-3 px-3 font-medium text-gray-900 border-b border-gray-200">
-                            Location
+                            Total
                           </th>
                         </tr>
                       </thead>
                       <tbody>
-                        {sortedBagSizesWithLocation.map((bagSize, idx) => {
-                          const qty = bagSize.quantity;
-                          const location =
-                            (bagSize as BagSizeWithLocation).location || "N/A";
-                          return (
-                            <tr key={idx} className="border-b border-gray-100">
-                              <td className="py-3 px-3 text-center">
-                                <span className="font-medium text-gray-900">
-                                  {formatBagSizeName(bagSize.size)}
-                                </span>
-                              </td>
-                              <td className="py-3 px-3 text-center">
+                        {/* Quantity Row */}
+                        <tr className="border-b border-gray-100">
+                          <td className="py-3 px-3">
+                            <span className="font-medium text-gray-900">
+                              Quantity
+                            </span>
+                          </td>
+                          {sortedBagSizesWithLocation.map((bagSize, idx) => {
+                            const qty = bagSize.quantity;
+                            return (
+                              <td key={idx} className="py-3 px-3 text-center">
                                 {qty && qty.initialQuantity ? (
                                   <span className="font-medium text-gray-900">
                                     {qty.currentQuantity || 0}/
@@ -685,21 +689,8 @@ ${sortedBagSizesWithLocation
                                   "-"
                                 )}
                               </td>
-                              <td className="py-3 px-3 text-center">
-                                <span className="text-sm text-gray-700">
-                                  {location}
-                                </span>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                        {/* Total Row */}
-                        <tr className="bg-primary/5 border-b border-primary/10">
-                          <td className="py-3 px-3 text-center">
-                            <span className="font-semibold text-gray-900">
-                              Total
-                            </span>
-                          </td>
+                            );
+                          })}
                           <td className="py-3 px-3 text-center">
                             <span className="font-semibold text-primary">
                               {sortedBagSizesWithLocation.reduce(
@@ -715,6 +706,48 @@ ${sortedBagSizesWithLocation
                               )}
                             </span>
                           </td>
+                        </tr>
+                        {/* Location Row */}
+                        <tr className="border-b border-gray-100">
+                          <td className="py-3 px-3">
+                            <span className="font-medium text-gray-900">
+                              Location
+                            </span>
+                          </td>
+                          {sortedBagSizesWithLocation.map((bagSize, idx) => {
+                            const location =
+                              (bagSize as BagSizeWithLocation).location ||
+                              "N/A";
+                            return (
+                              <td key={idx} className="py-3 px-3 text-center">
+                                <span className="text-sm text-gray-700">
+                                  {location}
+                                </span>
+                              </td>
+                            );
+                          })}
+                          <td className="py-3 px-3 text-center">
+                            <span className="text-sm text-gray-500">-</span>
+                          </td>
+                        </tr>
+                        {/* Marka Row */}
+                        <tr className="border-b border-gray-100">
+                          <td className="py-3 px-3">
+                            <span className="font-medium text-gray-900">
+                              Marka
+                            </span>
+                          </td>
+                          {sortedBagSizesWithLocation.map((bagSize, idx) => {
+                            const qty = bagSize.quantity;
+                            return (
+                              <td key={idx} className="py-3 px-3 text-center">
+                                <span className="text-sm text-gray-700">
+                                  {getFarmerInfo(order).farmerId}/
+                                  {qty?.initialQuantity || 0}
+                                </span>
+                              </td>
+                            );
+                          })}
                           <td className="py-3 px-3 text-center">
                             <span className="text-sm text-gray-500">-</span>
                           </td>
