@@ -179,7 +179,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "#E8E8E8",
   },
-  colMarka: {
+  colRemarks: {
     width: "8%",
     borderRightWidth: 0.5,
     borderRightColor: "#666",
@@ -653,10 +653,10 @@ const FarmerReportPDF: React.FC<FarmerReportPDFProps> = ({
             <View style={styles.colGrandTotal}>
               <Text style={styles.cellHeaderText}>G.TOTAL</Text>
             </View>
-            {/* Show Marka column only for receipt table */}
+            {/* Show Remarks column only for receipt table */}
             {!isDeliveryTable && (
-              <View style={styles.colMarka}>
-                <Text style={styles.cellHeaderText}>MARKA</Text>
+              <View style={styles.colRemarks}>
+                <Text style={styles.cellHeaderText}>REMARKS</Text>
               </View>
             )}
           </View>
@@ -733,12 +733,14 @@ const FarmerReportPDF: React.FC<FarmerReportPDFProps> = ({
                     : entry.grandTotal}
                 </Text>
               </View>
-              {/* Show Marka column only for receipt table */}
+              {/* Show Remarks column only for receipt table */}
               {!isDeliveryTable && (
-                <View style={styles.colMarka}>
-                  <Text
-                    style={styles.cellText}
-                  >{`${entry.voucher}/${entry.total}`}</Text>
+                <View style={styles.colRemarks}>
+                  <Text style={styles.cellText}>
+                    {receiptOrders.find(
+                      (o) => o.voucher.voucherNumber === entry.voucher
+                    )?.remarks || "-"}
+                  </Text>
                 </View>
               )}
             </View>
@@ -780,7 +782,7 @@ const FarmerReportPDF: React.FC<FarmerReportPDFProps> = ({
                   {entries[entries.length - 1]?.grandTotal || 0}
                 </Text>
               </View>
-              <View style={styles.colMarka}>
+              <View style={styles.colRemarks}>
                 <Text style={styles.balanceText}>-</Text>
               </View>
             </View>
