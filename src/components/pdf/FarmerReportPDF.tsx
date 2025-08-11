@@ -684,7 +684,7 @@ const FarmerReportPDF: React.FC<FarmerReportPDFProps> = ({
               </View>
               {bagSizes.map((size) => (
                 <View key={size} style={styles.colBagSize}>
-                  <Text style={styles.balanceText}>-</Text>
+                  <Text style={styles.balanceText}>{receiptTotals[size] || 0}</Text>
                 </View>
               ))}
               <View style={styles.colTotal}>
