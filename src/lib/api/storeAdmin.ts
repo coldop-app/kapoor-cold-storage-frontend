@@ -1,6 +1,6 @@
 import axios from "axios";
 import { BASE_URL } from "@/utils/const";
-import { IncomingOrdersResponse, KapoorOutgoingOrderResponse } from "@/utils/types";
+import { IncomingOrdersResponse, KapoorOutgoingOrderResponse, KapoorFarmerStockSummaryResponse } from "@/utils/types";
 import { KapoorDaybookOrdersResponse } from "@/utils/types";
 
 interface LoginCredentials {
@@ -949,6 +949,29 @@ export const storeAdminApi = {
         variety,
         storeAdminId,
       },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+    return response.data;
+  },
+
+  /**
+   * Fetches farmer stock summary for multiple farmers (Kapoor cold storage).
+   * @param farmerAccountIds Array of farmer account IDs
+   * @param token JWT Bearer token for authentication
+   * @returns Promise<KapoorFarmerStockSummaryResponse>
+   */
+  kapoorFarmerStockSummary: async (
+    farmerAccountIds: string[],
+    token: string
+  ): Promise<KapoorFarmerStockSummaryResponse> => {
+    const response = await axios.post<KapoorFarmerStockSummaryResponse>(
+      `${BASE_URL}/api/store-admin/kapoor/farmer-stock-summary`,
+      { farmerAccountIds },
       {
         headers: {
           "Content-Type": "application/json",

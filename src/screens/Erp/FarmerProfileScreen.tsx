@@ -17,6 +17,7 @@ import { StoreAdmin, Order } from '@/utils/types';
 import { PDFViewer } from '@react-pdf/renderer';
 import FarmerReportPDF from '@/components/pdf/FarmerReportPDF';
 import * as ReactDOM from 'react-dom/client';
+import FarmerStockSummaryTable from '@/components/common/FarmerStockSummaryTable';
 
 interface Farmer {
   _id: string;
@@ -63,154 +64,6 @@ interface FarmerAccountAPI {
   updatedAt: string;
   __v: number;
 }
-
-// Summary table component for farmer orders
-interface OrderSummary {
-  variety: string;
-  sizes: {
-    size: string;
-    totalQuantity: number;
-  }[];
-  totalBags: number;
-}
-
-const FarmerOrderSummaryTable = ({ orders }: { orders: KapoorSingleFarmerAllOrdersResponse['data'] }) => {
-  const adminInfo = useSelector((state: RootState) => state.auth.adminInfo) as StoreAdmin | null;
-
-  // Process orders to create summary - only include incoming orders for stock summary
-  const summary = useMemo(() => {
-    const varietyMap = new Map<string, Map<string, number>>();
-
-    orders.forEach(order => {
-      // Only process incoming orders (RECEIPT type) for stock summary
-      if (order.voucher.type === 'RECEIPT' && order.incomingBagSizes) {
-        const variety = order.variety || '';
-        if (!varietyMap.has(variety)) {
-          varietyMap.set(variety, new Map());
-        }
-
-        const sizeMap = varietyMap.get(variety)!;
-        order.incomingBagSizes.forEach(bag => {
-          const currentTotal = sizeMap.get(bag.size) || 0;
-          sizeMap.set(bag.size, currentTotal + bag.quantity.currentQuantity);
-        });
-      }
-    });
-
-    const summaryData: OrderSummary[] = [];
-    varietyMap.forEach((sizeMap, variety) => {
-      const sizes = Array.from(sizeMap.entries()).map(([size, totalQuantity]) => ({
-        size,
-        totalQuantity
-      }));
-
-      const totalBags = sizes.reduce((sum, size) => sum + size.totalQuantity, 0);
-
-      summaryData.push({
-        variety,
-        sizes,
-        totalBags
-      });
-    });
-
-    return summaryData.sort((a, b) => a.variety.localeCompare(b.variety));
-  }, [orders]);
-
-  // Get all unique bag sizes for consistent columns
-  const allBagSizes = useMemo(() => {
-    if (!adminInfo?.preferences?.bagSizes || adminInfo.preferences.bagSizes.length === 0) {
-      const uniqueSizes = new Set<string>();
-      summary.forEach(variety => {
-        variety.sizes.forEach(size => uniqueSizes.add(size.size));
-      });
-      return Array.from(uniqueSizes).sort();
-    }
-    return adminInfo.preferences.bagSizes;
-  }, [summary, adminInfo?.preferences?.bagSizes]);
-
-  // Helper function to get quantity for a specific bag size and variety
-  const getQuantityForSize = (variety: OrderSummary, sizeName: string) => {
-    const sizeData = variety.sizes.find(s => s.size === sizeName);
-    return sizeData ? sizeData.totalQuantity : 0;
-  };
-
-  // Helper function to calculate total for a specific bag size across all varieties
-  const getTotalForSize = (sizeName: string) => {
-    return summary.reduce((total, variety) => {
-      return total + getQuantityForSize(variety, sizeName);
-    }, 0);
-  };
-
-  const totalBags = summary.reduce((total, variety) => total + variety.totalBags, 0);
-
-  if (summary.length === 0) {
-    return null;
-  }
-
-  return (
-    <Card className="bg-white shadow-sm">
-      <CardContent className="p-0">
-        <div className="overflow-x-auto">
-          <div className="min-w-full inline-block align-middle">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b">
-                <tr>
-                  <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-gray-900 border-r whitespace-nowrap">
-                    Varieties
-                  </th>
-                  {allBagSizes.map((size: string) => (
-                    <th key={size} className="px-2 sm:px-3 lg:px-4 py-3 sm:py-4 text-center text-xs sm:text-sm font-semibold text-gray-900 border-r whitespace-nowrap">
-                      {size}
-                    </th>
-                  ))}
-                  <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 text-center text-xs sm:text-sm font-semibold text-gray-900 bg-blue-50 whitespace-nowrap">
-                    Total
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {summary.map((variety, index) => (
-                  <tr key={variety.variety} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
-                    <td className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 font-medium text-gray-900 border-r text-xs sm:text-sm">
-                      <div className="truncate max-w-[120px] sm:max-w-none" title={variety.variety}>
-                        {variety.variety}
-                      </div>
-                    </td>
-                    {allBagSizes.map((size: string) => (
-                      <td
-                        key={size}
-                        className="px-2 sm:px-3 lg:px-4 py-3 sm:py-4 text-center text-gray-700 border-r text-xs sm:text-sm"
-                      >
-                        {getQuantityForSize(variety, size)}
-                      </td>
-                    ))}
-                    <td className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 text-center font-bold text-blue-600 bg-blue-50 text-xs sm:text-sm">
-                      {variety.totalBags}
-                    </td>
-                  </tr>
-                ))}
-                {/* Totals Row */}
-                <tr className="bg-gray-100 font-bold">
-                  <td className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 text-gray-900 border-r text-xs sm:text-sm">
-                    Bag Total
-                  </td>
-                  {allBagSizes.map((size: string) => (
-                    <td key={size} className="px-2 sm:px-3 lg:px-4 py-3 sm:py-4 text-center text-gray-900 border-r text-xs sm:text-sm">
-                      {getTotalForSize(size)}
-                    </td>
-                  ))}
-                  <td className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 text-center text-blue-600 bg-blue-100 text-xs sm:text-sm">
-                    {totalBags}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-};
 
 const FarmerProfileScreen = () => {
   const { t } = useTranslation();
@@ -318,7 +171,7 @@ const FarmerProfileScreen = () => {
           bagSizes: order.incomingBagSizes?.map(bag => ({
             size: bag.size,
             quantity: {
-              initialQuantity: bag.quantity.currentQuantity,
+              initialQuantity: bag.quantity.initialQuantity,
               currentQuantity: bag.quantity.currentQuantity
             },
             location: bag.location
@@ -480,15 +333,34 @@ const FarmerProfileScreen = () => {
     enabled: !!adminInfo?.token && accountIds.length > 0,
   });
 
-  // Calculate total bags from incoming orders only
+  // New API call for farmer stock summary
+  const {
+    data: stockSummaryData,
+    isLoading: isStockSummaryLoading,
+    error: stockSummaryError,
+  } = useQuery({
+    queryKey: ['farmerStockSummary', accountIds, adminInfo?.token],
+    queryFn: () =>
+      accountIds.length > 0 && adminInfo?.token
+        ? storeAdminApi.kapoorFarmerStockSummary(accountIds, adminInfo.token)
+        : Promise.resolve(undefined),
+    enabled: !!adminInfo?.token && accountIds.length > 0,
+  });
+
+  // Calculate total bags from stock summary API data
   const totalBags = useMemo(() => {
-    if (!ordersData?.data) return 0;
-    return ordersData.data
-      .filter(order => order.voucher.type === 'RECEIPT' && order.incomingBagSizes)
-      .reduce((total, order) => {
-        return total + order.incomingBagSizes!.reduce((sum, bag) => sum + bag.quantity.currentQuantity, 0);
-      }, 0);
-  }, [ordersData?.data]);
+    if (!stockSummaryData?.stockSummaries) return 0;
+
+    let total = 0;
+    Object.values(stockSummaryData.stockSummaries).forEach(farmerVarieties => {
+      farmerVarieties.forEach(variety => {
+        variety.sizes.forEach(size => {
+          total += size.currentQuantity;
+        });
+      });
+    });
+    return total;
+  }, [stockSummaryData?.stockSummaries]);
 
   // Separate incoming and outgoing orders
   const incomingOrders = useMemo(() => {
@@ -640,7 +512,9 @@ const FarmerProfileScreen = () => {
                     <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
                       {t('farmerProfile.totalBags')}
                     </div>
-                    <div className="font-bold text-2xl text-primary">{totalBags}</div>
+                    <div className="font-bold text-2xl text-primary">
+                      {isStockSummaryLoading ? '...' : totalBags}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -683,12 +557,20 @@ const FarmerProfileScreen = () => {
         </div>
 
         {/* Order Summary Section */}
-        {ordersData?.data && ordersData.data.length > 0 && (
+        {(isStockSummaryLoading || stockSummaryData?.stockSummaries) && (
           <div className="mt-8">
             <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4">
-              Order Summary
+              Stock Summary
             </h2>
-            <FarmerOrderSummaryTable orders={ordersData.data} />
+            {isStockSummaryLoading ? (
+              <div className="text-gray-500">Loading stock summary...</div>
+            ) : stockSummaryError ? (
+              <div className="text-red-500">Failed to load stock summary.</div>
+            ) : stockSummaryData?.stockSummaries && Object.keys(stockSummaryData.stockSummaries).length > 0 ? (
+              <FarmerStockSummaryTable stockSummaryData={stockSummaryData.stockSummaries} />
+            ) : (
+              <div className="text-gray-500">No stock summary available.</div>
+            )}
           </div>
         )}
 

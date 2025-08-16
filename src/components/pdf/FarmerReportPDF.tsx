@@ -430,7 +430,7 @@ const FarmerReportPDF: React.FC<FarmerReportPDFProps> = ({
         // Group bags by location
         const bagsByLocation = new Map<
           string,
-          { size: string; quantity: number }[]
+          { size: string; initialQuantity: number }[]
         >();
 
         // Go through admin preferred bag sizes first
@@ -445,9 +445,20 @@ const FarmerReportPDF: React.FC<FarmerReportPDFProps> = ({
             if (!bagsByLocation.has(location)) {
               bagsByLocation.set(location, []);
             }
+
+            // Get the initial quantity from the bag data
+            let initialQty = 0;
+            if (matchingBag.quantity) {
+              if (typeof matchingBag.quantity === 'object' && 'initialQuantity' in matchingBag.quantity) {
+                initialQty = matchingBag.quantity.initialQuantity || 0;
+              } else if (typeof matchingBag.quantity === 'number') {
+                initialQty = matchingBag.quantity;
+              }
+            }
+
             bagsByLocation.get(location)?.push({
               size: preferredSize, // Use the preferred size name
-              quantity: matchingBag.quantity?.initialQuantity || 0,
+              initialQuantity: initialQty,
             });
           }
         });
@@ -463,8 +474,8 @@ const FarmerReportPDF: React.FC<FarmerReportPDFProps> = ({
           // Fill in the quantities for this location
           let locationTotal = 0;
           bags.forEach((bag) => {
-            locationQuantities[bag.size] = bag.quantity;
-            locationTotal += bag.quantity;
+            locationQuantities[bag.size] = bag.initialQuantity;
+            locationTotal += bag.initialQuantity;
           });
 
           if (locationTotal > 0) {
@@ -487,11 +498,9 @@ const FarmerReportPDF: React.FC<FarmerReportPDFProps> = ({
     // Sort entries by voucher number
     entries.sort((a, b) => a.voucher - b.voucher);
 
-    // Calculate running grand total after sorting
-    let total = 0;
+    // For receipt entries, grandTotal should be the same as total (no running total)
     entries.forEach((entry) => {
-      total += entry.total;
-      entry.grandTotal = total;
+      entry.grandTotal = entry.total;
     });
 
     return entries;
@@ -616,7 +625,7 @@ const FarmerReportPDF: React.FC<FarmerReportPDFProps> = ({
   ) => {
     const initialGrandTotal =
       isDeliveryTable && receiptEntries.length > 0
-        ? receiptEntries[receiptEntries.length - 1].grandTotal
+        ? receiptEntries.reduce((sum, entry) => sum + entry.total, 0)
         : 0;
 
     return (
@@ -774,12 +783,12 @@ const FarmerReportPDF: React.FC<FarmerReportPDFProps> = ({
               ))}
               <View style={styles.colTotal}>
                 <Text style={styles.balanceText}>
-                  {entries[entries.length - 1]?.grandTotal || 0}
+                  {entries.reduce((sum, entry) => sum + entry.total, 0)}
                 </Text>
               </View>
               <View style={styles.colGrandTotal}>
                 <Text style={styles.balanceText}>
-                  {entries[entries.length - 1]?.grandTotal || 0}
+                  {entries.reduce((sum, entry) => sum + entry.total, 0)}
                 </Text>
               </View>
               <View style={styles.colRemarks}>
@@ -868,21 +877,20 @@ const FarmerReportPDF: React.FC<FarmerReportPDFProps> = ({
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Total Bags Received:</Text>
               <Text style={styles.summaryValue}>
-                {receiptEntries[receiptEntries.length - 1]?.grandTotal || 0}
+                {receiptEntries.reduce((sum, entry) => sum + entry.total, 0)}
               </Text>
             </View>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Total Bags Delivered:</Text>
               <Text style={styles.summaryValue}>
-                {deliveryEntries[deliveryEntries.length - 1]?.grandTotal || 0}
+                {deliveryEntries.reduce((sum, entry) => sum + entry.total, 0)}
               </Text>
             </View>
             <View style={[styles.summaryRow, { backgroundColor: "#D0D0D0" }]}>
               <Text style={styles.summaryLabel}>CLOSING BALANCE:</Text>
               <Text style={styles.summaryValue}>
-                {(receiptEntries[receiptEntries.length - 1]?.grandTotal || 0) -
-                  (deliveryEntries[deliveryEntries.length - 1]?.grandTotal ||
-                    0)}
+                {receiptEntries.reduce((sum, entry) => sum + entry.total, 0) -
+                  deliveryEntries.reduce((sum, entry) => sum + entry.total, 0)}
               </Text>
             </View>
           </View>

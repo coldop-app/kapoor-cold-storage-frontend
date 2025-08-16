@@ -219,12 +219,15 @@ const IncomingOrderFormContent = () => {
     }
   }, [farmer]);
   const updateFormData = (field: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    // Remove spaces from the value
+    const trimmedValue = value.replace(/\s/g, '');
+    setFormData((prev) => ({ ...prev, [field]: trimmedValue }));
   };
 
   const updateQuantity = (bagType: string, value: string) => {
-    // Only allow numbers
-    const numericValue = value.replace(/\D/g, "");
+    // Remove spaces and only allow numbers
+    const cleanValue = value.replace(/\s/g, '');
+    const numericValue = cleanValue.replace(/\D/g, "");
     setFormData((prev) => ({
       ...prev,
       quantities: {
@@ -239,13 +242,16 @@ const IncomingOrderFormContent = () => {
     field: "chamber" | "floor" | "row",
     value: string
   ) => {
+    // Remove spaces from the value
+    const trimmedValue = value.replace(/\s/g, '');
+
     setFormData((prev) => {
       const currentDetails = prev.bagLocationDetails[bagType] || {
         chamber: "",
         floor: "",
         row: "",
       };
-      const updatedDetails = { ...currentDetails, [field]: value };
+      const updatedDetails = { ...currentDetails, [field]: trimmedValue };
 
       // Combine into single location string
       const locationString = `${updatedDetails.chamber}-${updatedDetails.floor}-${updatedDetails.row}`;
@@ -416,10 +422,12 @@ const IncomingOrderFormContent = () => {
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    setSearchQuery(value);
-    setFormData((prev) => ({ ...prev, farmerName: value, farmerId: "" }));
+    // Remove spaces from the search query
+    const trimmedValue = value.replace(/\s/g, '');
+    setSearchQuery(trimmedValue);
+    setFormData((prev) => ({ ...prev, farmerName: trimmedValue, farmerId: "" }));
     setShowDropdown(true);
-    debouncedSearch(value);
+    debouncedSearch(trimmedValue);
   };
 
   const handleSelectFarmer = (selectedFarmer: Farmer) => {

@@ -311,3 +311,23 @@ export interface KapoorOutgoingOrderResponse {
     __v: number;
   };
 }
+
+// New interface for Kapoor farmer stock summary API response
+export interface KapoorFarmerStockSummarySize {
+  size: string;
+  initialQuantity: number;
+  currentQuantity: number;
+  quantityRemoved?: number;
+}
+
+export interface KapoorFarmerStockSummaryVariety {
+  variety: string;
+  sizes: KapoorFarmerStockSummarySize[];
+}
+
+export interface KapoorFarmerStockSummaryResponse {
+  status: string;
+  stockSummaries: {
+    [farmerAccountId: string]: KapoorFarmerStockSummaryVariety[];
+  };
+}
