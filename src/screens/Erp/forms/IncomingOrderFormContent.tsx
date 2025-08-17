@@ -219,9 +219,14 @@ const IncomingOrderFormContent = () => {
     }
   }, [farmer]);
   const updateFormData = (field: string, value: string) => {
-    // Remove spaces from the value
-    const trimmedValue = value.replace(/\s/g, '');
-    setFormData((prev) => ({ ...prev, [field]: trimmedValue }));
+    // For variety and account fields, preserve spaces; for others, remove spaces
+    if (field === 'variety' || field === 'farmerAccount') {
+      setFormData((prev) => ({ ...prev, [field]: value }));
+    } else {
+      // Remove spaces from other fields
+      const trimmedValue = value.replace(/\s/g, '');
+      setFormData((prev) => ({ ...prev, [field]: trimmedValue }));
+    }
   };
 
   const updateQuantity = (bagType: string, value: string) => {
@@ -422,12 +427,11 @@ const IncomingOrderFormContent = () => {
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    // Remove spaces from the search query
-    const trimmedValue = value.replace(/\s/g, '');
-    setSearchQuery(trimmedValue);
-    setFormData((prev) => ({ ...prev, farmerName: trimmedValue, farmerId: "" }));
+    // Preserve spaces for farmer search (part of account selection)
+    setSearchQuery(value);
+    setFormData((prev) => ({ ...prev, farmerName: value, farmerId: "" }));
     setShowDropdown(true);
-    debouncedSearch(trimmedValue);
+    debouncedSearch(value);
   };
 
   const handleSelectFarmer = (selectedFarmer: Farmer) => {
