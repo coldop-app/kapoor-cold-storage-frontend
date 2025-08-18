@@ -1,7 +1,7 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import TopBar from '@/components/common/Topbar/Topbar';
-import { Phone, MapPin, Package, ArrowDownCircle, ArrowUpCircle, FileText } from 'lucide-react';
+import { Phone, MapPin, Package, ArrowDownCircle, ArrowUpCircle, FileText, Search } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -72,6 +72,11 @@ const FarmerProfileScreen = () => {
   const farmer = location.state?.farmer as Farmer;
   const adminInfo = useSelector((state: RootState) => state.auth.adminInfo);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+
+  // Add new state variables for search, filter, and sorting
+  const [searchReceiptNumber, setSearchReceiptNumber] = useState<string>("");
+  const [orderType, setOrderType] = useState<"all" | "incoming" | "outgoing">("all");
+  const [sortOrder, setSortOrder] = useState<"latest" | "oldest">("latest");
 
   // Helper function to convert new API format to IncomingOrderNew for ReceiptVoucherCard
   const convertToIncomingOrderNew = (order: KapoorSingleFarmerAllOrdersResponse['data'][number]) => {
@@ -362,14 +367,77 @@ const FarmerProfileScreen = () => {
     return total;
   }, [stockSummaryData?.stockSummaries]);
 
-  // Separate incoming and outgoing orders
-  const incomingOrders = useMemo(() => {
-    return ordersData?.data?.filter(order => order.voucher.type === 'RECEIPT') || [];
+  // Calculate farmerStock (cumulative stock across all vouchers in chronological order)
+  const farmerStockData = useMemo(() => {
+    if (!ordersData?.data) return [];
+
+    // Sort orders by creation date to get chronological sequence
+    const sortedOrders = [...ordersData.data].sort((a, b) =>
+      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+
+    let cumulativeStock = 0;
+
+    return sortedOrders.map((order) => {
+      let currentVoucherStock = 0;
+
+      if (order.voucher.type === 'RECEIPT') {
+        // For receipt vouchers, add the total bags from incomingBagSizes
+        currentVoucherStock = order.incomingBagSizes?.reduce((total, bag) =>
+          total + (bag.quantity?.initialQuantity || 0), 0) || 0;
+        cumulativeStock += currentVoucherStock;
+      } else if (order.voucher.type === 'DELIVERY') {
+        // For delivery vouchers, subtract the total bags removed
+        currentVoucherStock = order.orderDetails?.reduce((total, detail) =>
+          total + detail.bagSizes.reduce((sum, bag) =>
+            sum + (bag.quantityRemoved || 0), 0), 0) || 0;
+        cumulativeStock -= currentVoucherStock;
+      }
+
+      return {
+        orderId: order._id,
+        voucherNumber: order.voucher.voucherNumber,
+        voucherType: order.voucher.type,
+        createdAt: order.createdAt,
+        currentVoucherStock,
+        farmerStock: cumulativeStock, // This is the cumulative stock after this voucher
+        order: order
+      };
+    });
   }, [ordersData?.data]);
 
-  const outgoingOrders = useMemo(() => {
-    return ordersData?.data?.filter(order => order.voucher.type === 'DELIVERY') || [];
-  }, [ordersData?.data]);
+  // Separate incoming and outgoing orders with filtering and sorting
+  const filteredAndSortedOrders = useMemo(() => {
+    if (!ordersData?.data) return { incoming: [], outgoing: [] };
+
+    let filteredOrders = ordersData.data;
+
+    // Filter by type
+    if (orderType !== "all") {
+      filteredOrders = filteredOrders.filter(order =>
+        orderType === "incoming" ? order.voucher.type === "RECEIPT" : order.voucher.type === "DELIVERY"
+      );
+    }
+
+    // Sort orders
+    filteredOrders = [...filteredOrders].sort((a, b) => {
+      const dateA = new Date(a.createdAt).getTime();
+      const dateB = new Date(b.createdAt).getTime();
+      return sortOrder === "latest" ? dateB - dateA : dateA - dateB;
+    });
+
+    // Filter by search receipt number if provided
+    if (searchReceiptNumber) {
+      filteredOrders = filteredOrders.filter(order =>
+        order.voucher.voucherNumber.toString().includes(searchReceiptNumber)
+      );
+    }
+
+    const incoming = filteredOrders.filter(order => order.voucher.type === "RECEIPT");
+    const outgoing = filteredOrders.filter(order => order.voucher.type === "DELIVERY");
+
+    return { incoming, outgoing };
+  }, [ordersData?.data, orderType, sortOrder, searchReceiptNumber]);
 
   if (!farmer) {
     return (
@@ -574,38 +642,234 @@ const FarmerProfileScreen = () => {
           </div>
         )}
 
+        {/* Farmer Stock Timeline Section */}
+        {farmerStockData.length > 0 && (
+          <div className="mt-8">
+            <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4">
+              Stock Timeline
+            </h2>
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-100">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Voucher #
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Type
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Date
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Voucher Stock
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Cumulative Stock
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {farmerStockData.map((item) => (
+                      <tr key={item.orderId} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                          {item.voucherNumber}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            item.voucherType === 'RECEIPT'
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-red-100 text-red-800'
+                          }`}>
+                            {item.voucherType === 'RECEIPT' ? 'Receipt' : 'Delivery'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-500">
+                          {new Date(item.createdAt).toLocaleDateString()}
+                        </td>
+                        <td className="px-4 py-3 text-sm font-medium">
+                          <span className={item.voucherType === 'RECEIPT' ? 'text-green-600' : 'text-red-600'}>
+                            {item.voucherType === 'RECEIPT' ? '+' : '-'}{item.currentVoucherStock}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm font-bold text-primary">
+                          {item.farmerStock}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Orders Section */}
         <div className="mt-10">
           <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4">
             All Orders ({ordersData?.counts?.incoming || 0} Incoming, {ordersData?.counts?.outgoing || 0} Outgoing)
           </h2>
+
+          {/* Search and Filters */}
+          <div className="bg-white rounded-xl p-3 sm:p-4 lg:p-6 shadow-sm border border-gray-100 mb-4 sm:mb-6">
+            <div className="space-y-4 sm:space-y-5">
+              {/* Search Receipt */}
+              <div className="relative">
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={searchReceiptNumber}
+                    onChange={(e) => setSearchReceiptNumber(e.target.value)}
+                    placeholder="Search by receipt number..."
+                    className="w-full px-4 py-2.5 sm:py-3 pl-11 border border-gray-200 rounded-lg bg-gray-50/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm sm:text-base placeholder:text-gray-400 transition-all duration-200"
+                  />
+                  <Search
+                    className="absolute left-3.5 top-1/2 transform -translate-y-1/2 text-gray-400"
+                    size={18}
+                  />
+                </div>
+                {searchReceiptNumber && (
+                  <button
+                    onClick={() => setSearchReceiptNumber("")}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100 transition-all duration-200"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-4 w-4 sm:h-5 sm:w-5"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </button>
+                )}
+              </div>
+
+              {/* Filters Row */}
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+                <div className="w-full sm:w-[200px]">
+                  <select
+                    value={orderType}
+                    onChange={(e) => setOrderType(e.target.value as "all" | "incoming" | "outgoing")}
+                    className="w-full px-3 sm:px-4 py-2.5 border border-gray-200 rounded-lg bg-gray-50/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm sm:text-base disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200"
+                  >
+                    <option value="all">All Orders</option>
+                    <option value="incoming">Incoming</option>
+                    <option value="outgoing">Outgoing</option>
+                  </select>
+                </div>
+                <div className="w-full sm:w-[200px]">
+                  <select
+                    value={sortOrder}
+                    onChange={(e) => setSortOrder(e.target.value as "latest" | "oldest")}
+                    className="w-full px-3 sm:px-4 py-2.5 border border-gray-200 rounded-lg bg-gray-50/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm sm:text-base disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200"
+                  >
+                    <option value="latest">Latest First</option>
+                    <option value="oldest">Oldest First</option>
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 sm:flex gap-2 sm:gap-3 sm:ml-auto mt-1 sm:mt-0">
+                  <button
+                    onClick={() => navigate(`/erp/incoming-order`, { state: { farmer } })}
+                    className="w-full sm:w-auto px-3 sm:px-4 lg:px-6 py-2 sm:py-2.5 bg-primary text-white rounded-lg hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all duration-200 text-xs sm:text-sm lg:text-base font-medium inline-flex items-center justify-center gap-1 sm:gap-2 shadow-sm hover:shadow"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-3 w-3 sm:h-4 sm:w-4 lg:h-5 lg:w-5"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    <span className="truncate">Add Incoming</span>
+                  </button>
+                  <button
+                    onClick={() => navigate(`/erp/outgoing-order`, { state: { farmer } })}
+                    className="w-full sm:w-auto px-3 sm:px-4 lg:px-6 py-2 sm:py-2.5 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all duration-200 text-xs sm:text-sm lg:text-base font-medium inline-flex items-center justify-center gap-1 sm:gap-2 shadow-sm hover:shadow"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-3 w-3 sm:h-4 sm:w-4 lg:h-5 lg:w-5"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M3 3a1 1 0 011 1v12a1 1 0 11-2 0V4a1 1 0 011-1zm7.707 3.293a1 1 0 010 1.414L9.414 9H17a1 1 0 110 2H9.414l1.293 1.293a1 1 0 01-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    <span className="truncate">Add Outgoing</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {isOrdersLoading ? (
             <div className="text-gray-500">Loading orders...</div>
           ) : ordersError ? (
             <div className="text-red-500">Failed to load orders.</div>
-          ) : ordersData?.data?.length === 0 ? (
-            <div className="text-gray-500">No orders found for this farmer.</div>
+          ) : filteredAndSortedOrders.incoming.length === 0 && filteredAndSortedOrders.outgoing.length === 0 ? (
+            <div className="bg-white rounded-xl p-8 border border-gray-100 shadow-sm">
+              <div className="text-center">
+                <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                  <svg
+                    className="w-8 h-8 text-gray-400"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                    />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-1">
+                  {searchReceiptNumber
+                    ? "No receipt found"
+                    : "No orders found"}
+                </h3>
+                <p className="text-gray-500">
+                  {searchReceiptNumber
+                    ? "Try a different receipt number"
+                    : "Create a new order to get started"}
+                </p>
+              </div>
+            </div>
           ) : (
             <div className="space-y-6">
               {/* Incoming Orders */}
-              {incomingOrders.length > 0 && (
+              {filteredAndSortedOrders.incoming.length > 0 && (
                 <div className="space-y-4">
                   <h3 className="text-md font-medium text-gray-700 border-b border-gray-200 pb-2">
-                    Incoming Orders ({incomingOrders.length})
+                    Incoming Orders ({filteredAndSortedOrders.incoming.length})
                   </h3>
-                  {incomingOrders.map((order) => (
+                  {filteredAndSortedOrders.incoming.map((order) => (
                     <ReceiptVoucherCard key={order._id} order={convertToIncomingOrderNew(order)} />
                   ))}
                 </div>
               )}
 
               {/* Outgoing Orders */}
-              {outgoingOrders.length > 0 && (
+              {filteredAndSortedOrders.outgoing.length > 0 && (
                 <div className="space-y-4">
                   <h3 className="text-md font-medium text-gray-700 border-b border-gray-200 pb-2">
-                    Outgoing Orders ({outgoingOrders.length})
+                    Outgoing Orders ({filteredAndSortedOrders.outgoing.length})
                   </h3>
-                  {outgoingOrders.map((order) => (
+                  {filteredAndSortedOrders.outgoing.map((order) => (
                     <DeliveryVoucherCard key={order._id} order={convertToOrder(order)} />
                   ))}
                 </div>
