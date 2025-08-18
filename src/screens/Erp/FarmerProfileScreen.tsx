@@ -309,6 +309,100 @@ const FarmerProfileScreen = () => {
     }
   };
 
+  // Handle view variety-specific report functionality
+  const handleViewVarietyReport = async (variety: string) => {
+    if (!adminInfo || !isStoreAdmin(adminInfo) || !ordersData?.data) {
+      alert('Data not available for report generation');
+      return;
+    }
+
+    setIsGeneratingPDF(true);
+
+    try {
+      // Filter orders by variety and convert to the format expected by FarmerReportPDF
+      const varietyOrders = ordersData.data.filter(order =>
+        order.variety === variety ||
+        order.orderDetails?.some(detail => detail.variety === variety)
+      );
+
+      const ordersForPDF: Order[] = varietyOrders.map(convertToOrderForPDF);
+
+      // Log the data being sent to PDF
+      console.log(`=== VARIETY REPORT PDF DATA FOR ${variety} ===`);
+      console.log('Farmer Info:', {
+        _id: farmer._id,
+        name: farmer.name,
+        address: farmer.address,
+        mobileNumber: farmer.mobileNumber,
+        farmerId: farmer.farmerId,
+        createdAt: farmer.createdAt
+      });
+
+      console.log('Admin Info:', {
+        _id: adminInfo._id,
+        name: adminInfo.name,
+        coldStorageName: adminInfo.coldStorageDetails.coldStorageName,
+        coldStorageAddress: adminInfo.coldStorageDetails.coldStorageAddress,
+        bagSizes: adminInfo.preferences?.bagSizes || []
+      });
+
+      console.log('Variety Orders Summary:', {
+        variety: variety,
+        totalOrders: ordersForPDF.length,
+        receiptOrders: ordersForPDF.filter(order => order.voucher.type === 'RECEIPT').length,
+        deliveryOrders: ordersForPDF.filter(order => order.voucher.type === 'DELIVERY').length,
+        orders: ordersForPDF.map(order => ({
+          _id: order._id,
+          voucherType: order.voucher.type,
+          voucherNumber: order.voucher.voucherNumber,
+          date: order.dateOfSubmission || order.dateOfExtraction,
+          orderDetailsCount: order.orderDetails.length,
+          totalBags: order.orderDetails.reduce((total, detail) => {
+            if (order.voucher.type === 'RECEIPT') {
+              return total + detail.bagSizes.reduce((sum, bag) => sum + (bag.quantity?.initialQuantity || 0), 0);
+            } else {
+              return total + detail.bagSizes.reduce((sum, bag) => sum + (bag.quantityRemoved || 0), 0);
+            }
+          }, 0)
+        }))
+      });
+      console.log(`=== END VARIETY REPORT PDF DATA FOR ${variety} ===`);
+
+      // Open PDF in new window
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(`
+          <html>
+            <body>
+              <div id="root" style="height: 100vh;"></div>
+              <script>
+                window.onbeforeunload = null;
+              </script>
+            </body>
+          </html>
+        `);
+
+        const root = printWindow.document.getElementById('root');
+        if (root) {
+          ReactDOM.createRoot(root).render(
+            <PDFViewer width="100%" height="100%">
+              <FarmerReportPDF
+                farmer={farmer}
+                adminInfo={adminInfo}
+                orders={ordersForPDF}
+              />
+            </PDFViewer>
+          );
+        }
+      }
+    } catch (error) {
+      console.error('Error generating variety report:', error);
+      alert('Failed to generate report. Please try again.');
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
+
   const {
     data: accountsData,
     isLoading: isAccountsLoading,
@@ -617,6 +711,20 @@ const FarmerProfileScreen = () => {
                       Farmer ID
                     </div>
                     <div className="font-mono text-primary text-xl">{account.farmerId}</div>
+                    <div className="flex justify-end mt-3">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 hover:text-gray-900 shadow-sm hover:shadow-md transition-all duration-200 text-xs font-medium inline-flex items-center justify-center gap-2"
+                        onClick={() => handleViewVarietyReport(account.variety)}
+                        disabled={isGeneratingPDF || !ordersData?.data || !adminInfo || !isStoreAdmin(adminInfo)}
+                      >
+                        <FileText className="h-3 w-3 text-primary" />
+                        <span className="truncate">
+                          {isGeneratingPDF ? 'Generating...' : 'View Report'}
+                        </span>
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ))}

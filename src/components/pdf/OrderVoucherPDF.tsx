@@ -8,6 +8,7 @@ import {
   Image,
 } from "@react-pdf/renderer";
 import { Order, StoreAdmin } from "@/utils/types";
+import coldopLogo from "/coldop-logo.png";
 
 interface OrderVoucherPDFProps {
   order: Order;
@@ -17,350 +18,337 @@ interface OrderVoucherPDFProps {
 const styles = StyleSheet.create({
   page: {
     flexDirection: "column",
-    backgroundColor: "#FFFFFF",
-    padding: 25,
+    backgroundColor: "#FEFDF8",
+    padding: 16,
     fontFamily: "Helvetica",
-    fontSize: 10,
+    fontSize: 8,
   },
 
-  // Header Section
+  // Header Section - reduced size like FarmerReportPDF
   header: {
-    marginBottom: 20,
+    marginBottom: 12,
     borderBottomWidth: 2,
     borderBottomColor: "#000",
-    paddingBottom: 15,
+    paddingBottom: 10,
   },
   headerTop: {
     flexDirection: "row",
     alignItems: "flex-start",
-    marginBottom: 10,
+    marginBottom: 8,
+    position: "relative",
   },
   logoSection: {
-    width: 70,
-    marginRight: 15,
+    width: 50,
+    marginRight: 12,
+    position: "absolute",
+    left: 0,
+    top: 0,
   },
   logo: {
-    width: 60,
-    height: 60,
-    borderWidth: 2,
+    width: 45,
+    height: 45,
+    borderWidth: 1.5,
     borderColor: "#000",
-    borderRadius: 5,
+    borderRadius: 3,
   },
   companyInfo: {
     flex: 1,
-    paddingTop: 5,
+    paddingTop: 3,
+    alignItems: "center",
+    justifyContent: "center",
   },
   companyName: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: "bold",
     textAlign: "center",
-    marginBottom: 3,
-    letterSpacing: 1,
+    color: "#000",
+    marginBottom: 2,
+    letterSpacing: 0.5,
   },
   companyAddress: {
-    fontSize: 10,
+    fontSize: 8,
     textAlign: "center",
-    marginBottom: 2,
+    marginBottom: 3,
+    color: "#000",
+  },
+  // Header Coldop Branding
+  headerColdopBranding: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 2,
+  },
+  headerColdopLogo: {
+    width: 16,
+    height: 16,
+    marginRight: 4,
+    opacity: 0.8,
+  },
+  headerColdopText: {
+    fontSize: 7,
+    color: "#666",
+    fontStyle: "italic",
+    fontWeight: "400",
   },
   voucherTypeSection: {
-    width: 140,
+    width: 120,
     alignItems: "flex-end",
+    position: "absolute",
+    right: 0,
+    top: 0,
   },
   voucherType: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "bold",
     textAlign: "right",
-    marginBottom: 8,
+    color: "#000",
+    marginBottom: 4,
     textDecoration: "underline",
   },
   managerInfo: {
-    fontSize: 9,
+    fontSize: 7,
     textAlign: "right",
-    lineHeight: 1.2,
+    lineHeight: 1.1,
+    color: "#000",
   },
 
-  // Info Section
+  // Info Section - updated to match FarmerReportPDF layout
   infoSection: {
-    marginBottom: 15,
-    width: "100%",
-  },
-  infoRowMain: {
-    flexDirection: "row",
     marginBottom: 12,
-    alignItems: "center",
-    width: "100%",
-  },
-  infoRowSplit: {
     flexDirection: "row",
-    marginBottom: 12,
-    alignItems: "center",
-    width: "100%",
+    justifyContent: "space-between",
+  },
+  infoLeft: {
+    width: "48%",
+  },
+  infoRight: {
+    width: "48%",
+  },
+  infoRow: {
+    flexDirection: "row",
+    marginBottom: 3,
+    fontSize: 8,
   },
   infoLabel: {
-    fontSize: 11,
+    width: "40%",
     fontWeight: "bold",
-    width: 120,
-    flexShrink: 0,
-  },
-  infoLabelSmall: {
-    fontSize: 10,
-    fontWeight: "bold",
-    minWidth: 60,
+    color: "#000",
   },
   infoValue: {
-    fontSize: 11,
-    borderBottomWidth: 1,
-    borderBottomColor: "#000",
-    paddingBottom: 2,
-    paddingHorizontal: 5,
-    minHeight: 16,
-    flex: 1,
-    marginRight: 20,
-  },
-  infoValueSmall: {
-    fontSize: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#000",
-    paddingBottom: 2,
-    paddingHorizontal: 5,
-    minHeight: 16,
-    width: 150,
-  },
-  dateInfo: {
-    fontSize: 11,
-    fontWeight: "bold",
-  },
-  dateContainer: {
-    width: 200,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  dateLabel: {
-    fontSize: 11,
-    fontWeight: "bold",
-    marginRight: 5,
-  },
-  dateValue: {
-    fontSize: 11,
-    fontWeight: "bold",
+    width: "60%",
+    color: "#000",
   },
 
-  // Table Section
+  // Table Section - updated to match FarmerReportPDF style
   tableContainer: {
-    marginBottom: 20,
-    borderWidth: 2,
+    marginTop: 12,
+    marginBottom: 12,
+  },
+  table: {
+    borderWidth: 1,
     borderColor: "#000",
   },
   tableHeader: {
     flexDirection: "row",
-    backgroundColor: "#f5f5f5",
-    borderBottomWidth: 2,
+    backgroundColor: "#E8E8E8",
+    borderBottomWidth: 1,
     borderBottomColor: "#000",
-    minHeight: 40,
+    paddingVertical: 3,
   },
   tableRow: {
     flexDirection: "row",
-    borderBottomWidth: 1,
-    borderBottomColor: "#000",
-    minHeight: 35,
+    borderBottomWidth: 0.5,
+    borderBottomColor: "#666",
+    paddingVertical: 2,
+    minHeight: 16,
   },
 
-  // Table Columns
+  // Table Columns - updated to match FarmerReportPDF
   colChamber: {
     width: "6%",
-    borderRightWidth: 1,
-    borderRightColor: "#000",
-    padding: 3,
+    borderRightWidth: 0.5,
+    borderRightColor: "#666",
+    paddingHorizontal: 2,
     justifyContent: "center",
-    alignItems: "center",
   },
   colFloor: {
     width: "6%",
-    borderRightWidth: 1,
-    borderRightColor: "#000",
-    padding: 3,
+    borderRightWidth: 0.5,
+    borderRightColor: "#666",
+    paddingHorizontal: 2,
     justifyContent: "center",
-    alignItems: "center",
   },
   colRow: {
     width: "6%",
-    borderRightWidth: 1,
-    borderRightColor: "#000",
-    padding: 3,
+    borderRightWidth: 0.5,
+    borderRightColor: "#666",
+    paddingHorizontal: 2,
     justifyContent: "center",
-    alignItems: "center",
   },
   colVariety: {
-    width: "12%",
-    borderRightWidth: 1,
-    borderRightColor: "#000",
-    padding: 3,
+    width: "10%",
+    borderRightWidth: 0.5,
+    borderRightColor: "#666",
+    paddingHorizontal: 2,
     justifyContent: "center",
-    alignItems: "center",
   },
   colBagSize: {
-    flex: 1,
-    borderRightWidth: 1,
-    borderRightColor: "#000",
-    padding: 3,
+    width: "6%",
+    borderRightWidth: 0.5,
+    borderRightColor: "#666",
+    paddingHorizontal: 2,
     justifyContent: "center",
-    alignItems: "center",
   },
   colTotal: {
     width: "8%",
-    padding: 3,
+    borderRightWidth: 0.5,
+    borderRightColor: "#666",
+    paddingHorizontal: 2,
     justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#f9f9f9",
+    backgroundColor: "#F5F5F5",
   },
 
-  // Table Text Styles
+  // Table Text Styles - updated to match FarmerReportPDF
   tableHeaderText: {
-    fontSize: 10,
+    fontSize: 7,
     fontWeight: "bold",
     textAlign: "center",
+    color: "#000",
   },
   tableCellText: {
-    fontSize: 9,
+    fontSize: 7,
     textAlign: "center",
+    color: "#000",
   },
   tableCellTextBold: {
-    fontSize: 10,
+    fontSize: 7,
     fontWeight: "bold",
     textAlign: "center",
+    color: "#000",
   },
 
-  // Bottom Section
+  // Bottom Section - simplified for half page
   bottomSection: {
     flexDirection: "row",
-    marginTop: 25,
+    marginTop: 15,
+    justifyContent: "space-between",
   },
   leftBottomSection: {
     flex: 1,
-    marginRight: 40,
+    marginRight: 20,
   },
   rightBottomSection: {
-    width: 160,
+    width: 120,
     alignItems: "center",
   },
 
   // Total Bags Section
   totalBagsContainer: {
     flexDirection: "row",
-    marginBottom: 15,
+    marginBottom: 10,
     alignItems: "center",
   },
   totalBagsLabel: {
-    fontSize: 11,
+    fontSize: 8,
     fontWeight: "bold",
-    minWidth: 130,
+    minWidth: 80,
+    color: "#000",
   },
   totalBagsValue: {
-    fontSize: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#000",
-    paddingBottom: 2,
-    paddingHorizontal: 5,
-    minHeight: 16,
-    flex: 1,
-  },
-
-  // Owner Risk
-  ownerRiskText: {
-    fontSize: 11,
-    fontWeight: "bold",
-    marginBottom: 20,
-  },
-
-  // Additional Remarks
-  additionalRemarksContainer: {
-    marginTop: 10,
-  },
-  additionalRemarksTitle: {
-    fontSize: 11,
-    fontWeight: "bold",
-    marginBottom: 8,
-  },
-  remarksGrid: {
-    flexDirection: "column",
-  },
-  remarksRow: {
-    flexDirection: "row",
-    marginBottom: 6,
-    alignItems: "center",
-  },
-  remarksLabel: {
-    fontSize: 10,
-    fontWeight: "bold",
-    minWidth: 60,
-  },
-  remarksValue: {
-    fontSize: 10,
+    fontSize: 8,
     borderBottomWidth: 1,
     borderBottomColor: "#000",
     paddingBottom: 2,
     paddingHorizontal: 5,
     minHeight: 14,
-    width: 120,
+    flex: 1,
+    color: "#000",
   },
+
+
+
+  // Remarks Section - simplified
   remarksSection: {
-    marginTop: 15,
-    marginBottom: 20, // Add margin bottom to create space
-    padding: 10,
+    marginTop: 8,
+    padding: 6,
     borderWidth: 1,
     borderColor: "#000",
-    borderRadius: 4,
+    borderRadius: 2,
   },
   remarksTitle: {
-    fontSize: 11,
+    fontSize: 8,
     fontWeight: "bold",
-    marginBottom: 5,
+    marginBottom: 3,
+    color: "#000",
   },
   remarksText: {
-    fontSize: 10,
+    fontSize: 7,
     color: "#333",
   },
 
-  // Footer styles
+  // Signature - simplified
+  signatureContainer: {
+    alignItems: "center",
+  },
+  signatureBox: {
+    width: 100,
+    height: 40,
+    borderTopWidth: 1,
+    borderTopColor: "#000",
+    justifyContent: "flex-end",
+    alignItems: "center",
+    paddingBottom: 4,
+  },
+  signatureText: {
+    fontSize: 8,
+    fontWeight: "bold",
+    color: "#000",
+  },
+
+  // Coldop Branding - added to first half of page
+  coldopBranding: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 8,
+    paddingVertical: 4,
+  },
+  coldopBrandingLogo: {
+    width: 18,
+    height: 18,
+    marginRight: 6,
+    opacity: 0.8,
+  },
+  coldopBrandingText: {
+    fontSize: 8,
+    color: "#666",
+    fontStyle: "italic",
+    fontWeight: "500",
+  },
+
+  // Footer - simplified
   footer: {
     position: "absolute",
-    bottom: 25,
-    left: 25,
-    right: 25,
+    bottom: 16,
+    left: 16,
+    right: 16,
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
     borderTopWidth: 1,
-    borderTopColor: "#ddd",
-    paddingTop: 10,
+    borderTopColor: "#000",
+    paddingTop: 6,
   },
   coldopLogo: {
-    width: 20,
-    height: 20,
-    marginRight: 5,
+    width: 16,
+    height: 16,
+    marginRight: 4,
+    opacity: 0.85,
   },
   coldopText: {
-    fontSize: 10,
-    color: "#666",
-  },
-
-  // Signature
-  signatureContainer: {
-    marginTop: 30,
-    alignItems: "center",
-  },
-  signatureBox: {
-    width: 150,
-    height: 60,
-    borderTopWidth: 2,
-    borderTopColor: "#000",
-    justifyContent: "flex-end",
-    alignItems: "center",
-    paddingBottom: 8,
-  },
-  signatureText: {
-    fontSize: 11,
-    fontWeight: "bold",
+    fontSize: 6,
+    color: "#555",
+    fontStyle: "italic",
   },
 });
 
@@ -512,87 +500,81 @@ const OrderVoucherPDF: React.FC<OrderVoucherPDFProps> = ({
     const rows: TableRow[] = [];
 
     order.orderDetails.forEach((detail) => {
-      // For each bag size, create a separate row if it has a quantity
+      // Group bags by location and variety
+      const bagsByLocation = new Map<string, { size: string; quantity: number }[]>();
+
       detail.bagSizes.forEach((bag) => {
         const quantity = isReceipt
           ? bag.quantity?.initialQuantity || 0
           : bag.quantityRemoved || 0;
 
         if (quantity > 0) {
-          // Parse location for this specific bag
-          // Priority: bag.location > detail.location > incomingOrder.location
-          let locationString = "";
+          // Get location for this bag
+          const locationString = bag.location || detail.location || detail.incomingOrder?.location || "-";
 
-          // Try to get location from different possible sources
-          // Priority: bag.location > detail.location > incomingOrder.location
-          if (bag.location) {
-            locationString = bag.location;
-          } else if (detail.location) {
-            locationString = detail.location;
-          } else if (detail.incomingOrder?.location) {
-            locationString = detail.incomingOrder.location;
+          if (!bagsByLocation.has(locationString)) {
+            bagsByLocation.set(locationString, []);
           }
 
-          // For outgoing orders, try to get location from the incoming order's bag sizes
-          if (!locationString && detail.incomingOrder?.incomingBagSizes) {
-            const matchingIncomingBag =
-              detail.incomingOrder.incomingBagSizes.find(
-                (incomingBag) => incomingBag.size === bag.size
-              );
-            // Note: IncomingBagSize doesn't have location property, but some newer types do
-            if (matchingIncomingBag && "location" in matchingIncomingBag) {
-              locationString = (matchingIncomingBag as { location: string })
-                .location;
-            }
-          }
+          bagsByLocation.get(locationString)?.push({
+            size: bag.size,
+            quantity: quantity,
+          });
+        }
+      });
 
-          // If still no location, try to get from the incoming order's bag sizes with location
-          if (!locationString && detail.incomingOrder?.incomingBagSizes) {
-            // Look for any bag size with location in the incoming order
-            const bagWithLocation = detail.incomingOrder.incomingBagSizes.find(
-              (incomingBag) =>
-                "location" in incomingBag &&
-                (incomingBag as { location: string }).location
-            );
-            if (bagWithLocation && "location" in bagWithLocation) {
-              locationString = (bagWithLocation as { location: string })
-                .location;
-            }
-          }
+      // Create rows for each location, prioritizing bag sizes according to admin preferences order
+      bagsByLocation.forEach((bags, location) => {
+        const locationDetails = parseLocation(location);
 
-          // If still no location, try to get from the order details level
-          if (!locationString && detail.location) {
-            locationString = detail.location;
-          }
-
-          // If still no location, try to get from the incoming order level
-          if (!locationString && detail.incomingOrder?.location) {
-            locationString = detail.incomingOrder.location;
-          }
-
-          const locationDetails = parseLocation(locationString);
-
-          // Debug: Log the location data for this bag
-          console.log(
-            `Bag ${bag.size}: locationString="${locationString}", parsed=`,
-            locationDetails
+        // Create bag sizes array with quantities filled according to admin preferences order
+        const bagSizesWithQuantities = allBagSizes.map((preferredSize) => {
+          // Find if this preferred size has a quantity in the current location
+          const matchingBag = bags.find(bag =>
+            bag.size.toLowerCase().replace(/[-\s]/g, "") === preferredSize.toLowerCase().replace(/[-\s]/g, "")
           );
 
-          // Create a row with this specific bag size and location
-          const bagSizesMap = new Map();
-          bagSizesMap.set(bag.size, quantity);
+          return {
+            size: preferredSize,
+            quantity: matchingBag ? matchingBag.quantity : "-",
+          };
+        });
 
+        // Only add row if there are actual quantities (not all "-")
+        const hasQuantities = bagSizesWithQuantities.some(bag => bag.quantity !== "-");
+        if (hasQuantities) {
           rows.push({
             variety: detail.variety,
-            bagSizes: allBagSizes.map((size) => ({
-              size,
-              quantity: bagSizesMap.get(size) || "-",
-            })),
+            bagSizes: bagSizesWithQuantities,
             location: locationDetails,
           });
         }
       });
     });
+
+          // Sort rows based on the priority of bag sizes they contain
+      rows.sort((a, b) => {
+        // Find the highest priority bag size (lowest index) that has a quantity for each row
+        let aPriority = allBagSizes.length;
+        let bPriority = allBagSizes.length;
+
+        for (let i = 0; i < allBagSizes.length; i++) {
+          if (a.bagSizes[i].quantity !== "-" && a.bagSizes[i].quantity !== 0) {
+            aPriority = i;
+            break;
+          }
+        }
+
+        for (let i = 0; i < allBagSizes.length; i++) {
+          if (b.bagSizes[i].quantity !== "-" && b.bagSizes[i].quantity !== 0) {
+            bPriority = i;
+            break;
+          }
+        }
+
+        // Lower priority index means higher priority (should come first)
+        return aPriority - bPriority;
+      });
 
     return rows;
   };
@@ -657,12 +639,24 @@ const OrderVoucherPDF: React.FC<OrderVoucherPDFProps> = ({
               <Text style={styles.companyAddress}>
                 {adminInfo.coldStorageDetails.coldStorageAddress}
               </Text>
+              {/* Coldop Branding below address */}
+              <View style={styles.headerColdopBranding}>
+                <Image style={styles.headerColdopLogo} src={coldopLogo} />
+                <Text style={styles.headerColdopText}>Powered by Coldop</Text>
+              </View>
             </View>
 
             {/* Voucher Type and Manager Info */}
             <View style={styles.voucherTypeSection}>
-              <Text style={styles.voucherType}>
-                {isReceipt ? "RECEIPT VOUCHER" : "DELIVERY VOUCHER"}
+              <Text
+                style={[
+                  styles.voucherType,
+                  {
+                    color: isReceipt ? "#008000" : "#FF0000" // Green for Receipt, Red for Delivery
+                  }
+                ]}
+              >
+                {isReceipt ? "R VOUCHER" : "D VOUCHER"}
               </Text>
               <Text style={styles.managerInfo}>
                 Manager{"\n"}
@@ -676,11 +670,30 @@ const OrderVoucherPDF: React.FC<OrderVoucherPDFProps> = ({
 
         {/* Info Section */}
         <View style={styles.infoSection}>
-          {/* Voucher Number and Date */}
-          <View style={styles.infoRowSplit}>
-            <View
-              style={{ flexDirection: "row", alignItems: "center", flex: 1 }}
-            >
+          <View style={styles.infoLeft}>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>A/c No.:</Text>
+              <Text style={styles.infoValue}>{order.farmerId.farmerId}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Name:</Text>
+              <Text style={styles.infoValue}>{order.farmerId.name}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Address:</Text>
+              <Text style={styles.infoValue}>
+                {order.farmerId.address || "N/A"}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.infoRight}>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Mobile:</Text>
+              <Text style={styles.infoValue}>
+                {order.farmerId.mobileNumber || "N/A"}
+              </Text>
+            </View>
+            <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>
                 {isReceipt ? "Receipt Voucher No:" : "Delivery Voucher No:"}
               </Text>
@@ -688,147 +701,113 @@ const OrderVoucherPDF: React.FC<OrderVoucherPDFProps> = ({
                 {order.voucher.voucherNumber}
               </Text>
             </View>
-            <View style={styles.dateContainer}>
-              <Text style={styles.dateLabel}>Dated:</Text>
-              <Text style={styles.dateValue}>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Dated:</Text>
+              <Text style={styles.infoValue}>
                 {new Date(order.createdAt || new Date()).toLocaleDateString(
                   "en-GB"
                 )}
               </Text>
             </View>
           </View>
-
-          {/* Party Name */}
-          <View style={styles.infoRowMain}>
-            <Text style={styles.infoLabel}>Name of the Party:</Text>
-            <Text style={styles.infoValue}>{order.farmerId.name}</Text>
-          </View>
-
-          {/* Account Number */}
-          <View style={styles.infoRowMain}>
-            <Text style={styles.infoLabel}>A/c No:</Text>
-            <Text style={styles.infoValue}>{order.farmerId.farmerId}</Text>
-          </View>
-
-          {/* Address */}
-          <View style={styles.infoRowMain}>
-            <Text style={styles.infoLabel}>Address:</Text>
-            <Text style={styles.infoValue}>
-              {order.farmerId.address || "N/A"}
-            </Text>
-          </View>
-
-          {/* Mobile */}
-          <View style={styles.infoRowMain}>
-            <Text style={styles.infoLabel}>Mobile:</Text>
-            <Text style={styles.infoValue}>
-              {order.farmerId.mobileNumber || "N/A"}
-            </Text>
-          </View>
         </View>
 
         {/* Table */}
         <View style={styles.tableContainer}>
-          {/* Table Header */}
-          <View style={styles.tableHeader}>
-            <View style={styles.colChamber}>
-              <Text style={[styles.tableHeaderText, { fontSize: 8 }]}>CH</Text>
-            </View>
-            <View style={styles.colFloor}>
-              <Text style={[styles.tableHeaderText, { fontSize: 8 }]}>FL</Text>
-            </View>
-            <View style={styles.colRow}>
-              <Text style={[styles.tableHeaderText, { fontSize: 8 }]}>Row</Text>
-            </View>
-            <View style={styles.colVariety}>
-              <Text style={[styles.tableHeaderText, { fontSize: 8 }]}>
-                Variety
-              </Text>
-            </View>
-            {allBagSizes.map((size, index) => (
-              <View key={index} style={styles.colBagSize}>
-                <Text style={[styles.tableHeaderText, { fontSize: 8 }]}>
-                  {size}
-                </Text>
-              </View>
-            ))}
-            <View style={styles.colTotal}>
-              <Text style={[styles.tableHeaderText, { fontSize: 8 }]}>
-                Total
-              </Text>
-            </View>
-          </View>
-
-          {/* Table Rows */}
-          {tableRows.map((row, index) => (
-            <View key={index} style={styles.tableRow}>
+          <View style={styles.table}>
+            {/* Table Header */}
+            <View style={styles.tableHeader}>
               <View style={styles.colChamber}>
-                <Text style={[styles.tableCellText, { fontSize: 8 }]}>
-                  {row.location.chamber}
-                </Text>
+                <Text style={styles.tableHeaderText}>CH</Text>
               </View>
               <View style={styles.colFloor}>
-                <Text style={[styles.tableCellText, { fontSize: 8 }]}>
-                  {row.location.floor}
-                </Text>
+                <Text style={styles.tableHeaderText}>FL</Text>
               </View>
               <View style={styles.colRow}>
-                <Text style={[styles.tableCellText, { fontSize: 8 }]}>
-                  {row.location.row}
-                </Text>
+                <Text style={styles.tableHeaderText}>ROW</Text>
               </View>
               <View style={styles.colVariety}>
-                <Text style={[styles.tableCellText, { fontSize: 8 }]}>
-                  {row.variety}
-                </Text>
+                <Text style={styles.tableHeaderText}>VARIETY</Text>
               </View>
-              {row.bagSizes.map((bag, bagIndex) => (
-                <View key={bagIndex} style={styles.colBagSize}>
-                  <Text style={[styles.tableCellText, { fontSize: 8 }]}>
-                    {bag.quantity}
+              {allBagSizes.map((size, index) => (
+                <View key={index} style={styles.colBagSize}>
+                  <Text style={styles.tableHeaderText}>{size}</Text>
+                </View>
+              ))}
+              <View style={styles.colTotal}>
+                <Text style={styles.tableHeaderText}>TOTAL</Text>
+              </View>
+            </View>
+
+            {/* Table Rows */}
+            {tableRows.map((row, index) => (
+              <View key={index} style={styles.tableRow}>
+                <View style={styles.colChamber}>
+                  <Text style={styles.tableCellText}>
+                    {row.location.chamber}
+                  </Text>
+                </View>
+                <View style={styles.colFloor}>
+                  <Text style={styles.tableCellText}>
+                    {row.location.floor}
+                  </Text>
+                </View>
+                <View style={styles.colRow}>
+                  <Text style={styles.tableCellText}>
+                    {row.location.row}
+                  </Text>
+                </View>
+                <View style={styles.colVariety}>
+                  <Text style={styles.tableCellText}>
+                    {row.variety}
+                  </Text>
+                </View>
+                {row.bagSizes.map((bag, bagIndex) => (
+                  <View key={bagIndex} style={styles.colBagSize}>
+                    <Text style={styles.tableCellText}>
+                      {bag.quantity}
+                    </Text>
+                  </View>
+                ))}
+                <View style={styles.colTotal}>
+                  <Text style={styles.tableCellTextBold}>
+                    {calculateRowTotal(row.bagSizes)}
+                  </Text>
+                </View>
+              </View>
+            ))}
+
+            {/* Marka Row */}
+            <View style={[styles.tableRow, { backgroundColor: "#F5F5F5" }]}>
+              <View style={styles.colChamber}>
+                <Text style={styles.tableCellTextBold}>-</Text>
+              </View>
+              <View style={styles.colFloor}>
+                <Text style={styles.tableCellTextBold}>-</Text>
+              </View>
+              <View style={styles.colRow}>
+                <Text style={styles.tableCellTextBold}>-</Text>
+              </View>
+              <View style={styles.colVariety}>
+                <Text style={styles.tableCellTextBold}>MARKA</Text>
+              </View>
+              {allBagSizes.map((size, index) => (
+                <View key={index} style={styles.colBagSize}>
+                  <Text style={styles.tableCellTextBold}>
+                    {columnTotals.get(size)
+                      ? `${order.farmerId.farmerId}/${columnTotals.get(size)}`
+                      : ""}
                   </Text>
                 </View>
               ))}
               <View style={styles.colTotal}>
-                <Text style={[styles.tableCellTextBold, { fontSize: 8 }]}>
-                  {calculateRowTotal(row.bagSizes)}
+                <Text style={styles.tableCellTextBold}>
+                  {Array.from(columnTotals.values()).reduce(
+                    (sum, total) => sum + total,
+                    0
+                  )}
                 </Text>
               </View>
-            </View>
-          ))}
-
-          {/* Marka Row */}
-          <View style={[styles.tableRow, { backgroundColor: "#f5f5f5" }]}>
-            <View style={styles.colChamber}>
-              <Text style={[styles.tableCellTextBold, { fontSize: 8 }]}>-</Text>
-            </View>
-            <View style={styles.colFloor}>
-              <Text style={[styles.tableCellTextBold, { fontSize: 8 }]}>-</Text>
-            </View>
-            <View style={styles.colRow}>
-              <Text style={[styles.tableCellTextBold, { fontSize: 8 }]}>-</Text>
-            </View>
-            <View style={styles.colVariety}>
-              <Text style={[styles.tableCellTextBold, { fontSize: 8 }]}>
-                Marka
-              </Text>
-            </View>
-            {allBagSizes.map((size, index) => (
-              <View key={index} style={styles.colBagSize}>
-                <Text style={[styles.tableCellTextBold, { fontSize: 8 }]}>
-                  {columnTotals.get(size)
-                    ? `${order.farmerId.farmerId}/${columnTotals.get(size)}`
-                    : ""}
-                </Text>
-              </View>
-            ))}
-            <View style={styles.colTotal}>
-              <Text style={[styles.tableCellTextBold, { fontSize: 8 }]}>
-                {Array.from(columnTotals.values()).reduce(
-                  (sum, total) => sum + total,
-                  0
-                )}
-              </Text>
             </View>
           </View>
         </View>
@@ -864,11 +843,7 @@ const OrderVoucherPDF: React.FC<OrderVoucherPDFProps> = ({
           </View>
         </View>
 
-        {/* Footer with Coldop Branding */}
-        <View style={styles.footer}>
-          <Image style={styles.coldopLogo} src="/coldop-logo.png" />
-          <Text style={styles.coldopText}>Powered by Coldop</Text>
-        </View>
+
       </Page>
     </Document>
   );
