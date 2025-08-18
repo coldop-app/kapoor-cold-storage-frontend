@@ -78,25 +78,28 @@ const getBagSizeFieldName = (bagSize: string): string => {
 interface FormData {
   farmerName: string;
   farmerId: string;
+  farmerAccount: string;
   quantities: BagQuantities;
-  mainLocation: string;
+  bagLocations: { [key: string]: string };
+  bagLocationDetails: {
+    [key: string]: { chamber: string; floor: string; row: string };
+  };
   remarks: string;
   variety: string;
+  dateOfEntry: string;
 }
 
-interface UpdateIncomingOrderPayload {
+interface KapoorEditIncomingOrderPayload {
   remarks: string;
-  dateOfSubmission: string;
-  fulfilled: boolean;
-  orderDetails: {
-    variety: string;
-    bagSizes: {
-      size: string;
-      quantity: {
-        initialQuantity: number;
-        currentQuantity: number;
-      };
-    }[];
+  dateOfEntry: string;
+  variety: string;
+  farmerAccount: string;
+  incomingBagSizes: {
+    size: string;
+    quantity: {
+      initialQuantity: number;
+      currentQuantity: number;
+    };
     location: string;
   }[];
 }
@@ -134,13 +137,37 @@ const EditIncomingOrderFormContent = ({ order }: EditIncomingOrderFormContentPro
 
     console.log('Final quantities object:', quantities);
 
+    // Parse existing location data if available
+    const bagLocations: { [key: string]: string } = {};
+    const bagLocationDetails: { [key: string]: { chamber: string; floor: string; row: string } } = {};
+
+    // If the order has location data, parse it
+    if (orderDetail.location) {
+      const locationParts = orderDetail.location.split('-');
+      if (locationParts.length === 3) {
+        // Set the main location for all bag sizes
+        adminInfo?.preferences?.bagSizes?.forEach(bagSize => {
+          const fieldName = getBagSizeFieldName(bagSize);
+          bagLocations[fieldName] = orderDetail.location || "";
+          bagLocationDetails[fieldName] = {
+            chamber: locationParts[0] || "",
+            floor: locationParts[1] || "",
+            row: locationParts[2] || ""
+          };
+        });
+      }
+    }
+
     return {
       farmerName: order.farmerId.name,
       farmerId: order.farmerId._id,
+      farmerAccount: order.farmerId._id, // Use farmer ID as account for now
       quantities,
-      mainLocation: orderDetail.location || "",
+      bagLocations,
+      bagLocationDetails,
       remarks: order.remarks || "",
-      variety: orderDetail.variety
+      variety: orderDetail.variety,
+      dateOfEntry: new Date().toISOString().split('T')[0]
     };
   });
 
@@ -164,6 +191,39 @@ const EditIncomingOrderFormContent = ({ order }: EditIncomingOrderFormContentPro
         [bagType]: numericValue
       }
     }));
+  };
+
+  const updateLocationDetails = (
+    bagType: string,
+    field: "chamber" | "floor" | "row",
+    value: string
+  ) => {
+    // Remove spaces from the value
+    const trimmedValue = value.replace(/\s/g, '');
+
+    setFormData((prev) => {
+      const currentDetails = prev.bagLocationDetails[bagType] || {
+        chamber: "",
+        floor: "",
+        row: "",
+      };
+      const updatedDetails = { ...currentDetails, [field]: trimmedValue };
+
+      // Combine into single location string
+      const locationString = `${updatedDetails.chamber}-${updatedDetails.floor}-${updatedDetails.row}`;
+
+      return {
+        ...prev,
+        bagLocationDetails: {
+          ...prev.bagLocationDetails,
+          [bagType]: updatedDetails,
+        },
+        bagLocations: {
+          ...prev.bagLocations,
+          [bagType]: locationString,
+        },
+      };
+    });
   };
 
   const calculateTotal = () => {
@@ -194,29 +254,28 @@ const EditIncomingOrderFormContent = ({ order }: EditIncomingOrderFormContentPro
         throw new Error("No authentication token found");
       }
 
-      const payload: UpdateIncomingOrderPayload = {
+      const payload: KapoorEditIncomingOrderPayload = {
         remarks: formData.remarks,
-        dateOfSubmission: order.dateOfSubmission || new Date().toISOString(),  // Provide default value
-        fulfilled: order.fulfilled || false,
-        orderDetails: [{
-          variety: formData.variety,
-          bagSizes: adminInfo.preferences?.bagSizes?.map(bagSize => {
-            const fieldName = getBagSizeFieldName(bagSize);
-            const currentQuantity = parseInt(formData.quantities[fieldName] || "0");
-            return {
-              size: bagSize,
-              quantity: {
-                initialQuantity: currentQuantity, // Set initial quantity to the same as current
-                currentQuantity: currentQuantity
-              }
-            };
-          }).filter(bagSize => bagSize.quantity.currentQuantity > 0) || [],
-          location: formData.mainLocation
-        }]
+        dateOfEntry: formData.dateOfEntry,
+        variety: formData.variety,
+        farmerAccount: formData.farmerAccount,
+        incomingBagSizes: adminInfo.preferences?.bagSizes?.map(bagSize => {
+          const fieldName = getBagSizeFieldName(bagSize);
+          const currentQuantity = parseInt(formData.quantities[fieldName] || "0");
+          const location = formData.bagLocations[fieldName] || "";
+          return {
+            size: bagSize,
+            quantity: {
+              initialQuantity: currentQuantity,
+              currentQuantity: currentQuantity
+            },
+            location: location
+          };
+        }).filter(bagSize => bagSize.quantity.currentQuantity > 0) || []
       };
 
-      // Keep the original voucher and other fields from the order
-      const updatedOrder = await storeAdminApi.updateIncomingOrder(order._id, payload, adminInfo.token);
+      // Use the new Kapoor API
+      const updatedOrder = await storeAdminApi.kapoorEditIncomingOrder(order._id, payload, adminInfo.token);
 
       // Return the response which should maintain the same structure
       return updatedOrder;
@@ -238,8 +297,18 @@ const EditIncomingOrderFormContent = ({ order }: EditIncomingOrderFormContentPro
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.mainLocation.trim()) {
-      toast.error(t('editIncomingOrder.errors.enterLocation'));
+    // Validate that all bag locations are filled
+    const hasEmptyLocations = adminInfo?.preferences?.bagSizes?.some(
+      (bagSize) => {
+        const fieldName = getBagSizeFieldName(bagSize);
+        const quantity = parseInt(formData.quantities[fieldName] || "0");
+        const location = formData.bagLocations[fieldName] || "";
+        return quantity > 0 && !location.trim();
+      }
+    );
+
+    if (hasEmptyLocations) {
+      toast.error(t('incomingOrder.errors.enterAllLocations'));
       return;
     }
 
@@ -295,6 +364,18 @@ const EditIncomingOrderFormContent = ({ order }: EditIncomingOrderFormContentPro
                 <div className="text-sm text-gray-600">
                   <p className="font-medium text-gray-900">{formData.farmerName}</p>
                 </div>
+              </div>
+
+              {/* Date of Entry */}
+              <div className="border border-green-200 rounded-lg p-4 bg-green-50/50">
+                <h3 className="text-lg font-medium mb-2">Date of Entry</h3>
+                <input
+                  type="date"
+                  value={formData.dateOfEntry || new Date().toISOString().split('T')[0]}
+                  onChange={(e) => updateFormData('dateOfEntry', e.target.value)}
+                  className="w-full p-3 border border-border rounded-md bg-background focus:ring-2 focus:ring-primary focus:border-primary transition"
+                  required
+                />
               </div>
 
               {/* Variety Selection */}
@@ -375,24 +456,166 @@ const EditIncomingOrderFormContent = ({ order }: EditIncomingOrderFormContentPro
             <div className="space-y-6">
               <div className="border border-green-200 rounded-lg p-4 bg-green-50/50">
                 <h3 className="text-lg font-medium mb-2">{t('incomingOrder.location.title')}</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  {t('incomingOrder.location.description')}
+                </p>
 
                 <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-2">{t('incomingOrder.location.mainLabel')}</label>
-                    <input
-                      type="text"
-                      value={formData.mainLocation}
-                      onChange={(e) => updateFormData('mainLocation', e.target.value)}
-                      placeholder={t('incomingOrder.location.placeholder')}
-                      className="w-full p-3 border border-border rounded-md bg-background focus:ring-2 focus:ring-primary focus:border-primary transition"
-                      required
-                    />
-                  </div>
+                  {/* Bag Locations */}
+                  {adminInfo?.preferences?.bagSizes?.map((bagSize) => {
+                    const fieldName = getBagSizeFieldName(bagSize);
+                    const quantity = parseInt(
+                      formData.quantities[fieldName] || "0"
+                    );
+                    const locationDetails = formData.bagLocationDetails[
+                      fieldName
+                    ] || { chamber: "", floor: "", row: "" };
+
+                    // Only show location input if quantity > 0
+                    if (quantity === 0) return null;
+
+                    return (
+                      <div key={bagSize} className="space-y-3">
+                        <label className="block text-sm font-medium">
+                          {formatBagSizeLabel(bagSize)} -{" "}
+                          {formData.quantities[fieldName] || "0"} {t('bags')}
+                        </label>
+                        <div className="grid grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-muted-foreground mb-1">
+                              Chamber
+                            </label>
+                            <input
+                              type="text"
+                              data-location-input={`${fieldName}-chamber`}
+                              value={locationDetails.chamber}
+                              onChange={(e) =>
+                                updateLocationDetails(
+                                  fieldName,
+                                  "chamber",
+                                  e.target.value
+                                )
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  const floorInput = document.querySelector(
+                                    `input[data-location-input="${fieldName}-floor"]`
+                                  ) as HTMLInputElement;
+                                  if (floorInput) floorInput.focus();
+                                }
+                              }}
+                              className="w-full p-2 border border-border rounded-md bg-background focus:ring-2 focus:ring-primary focus:border-primary transition text-center"
+                              required
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium mb-1">
+                              Floor
+                            </label>
+                            <input
+                              type="text"
+                              data-location-input={`${fieldName}-floor`}
+                              value={locationDetails.floor}
+                              onChange={(e) =>
+                                updateLocationDetails(
+                                  fieldName,
+                                  "floor",
+                                  e.target.value
+                                )
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  const rowInput = document.querySelector(
+                                    `input[data-location-input="${fieldName}-row"]`
+                                  ) as HTMLInputElement;
+                                  if (rowInput) rowInput.focus();
+                                }
+                              }}
+                              className="w-full p-2 border border-border rounded-md bg-background focus:ring-2 focus:ring-primary focus:border-primary transition text-center"
+                              required
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium mb-1">
+                              Row
+                            </label>
+                            <input
+                              type="text"
+                              data-location-input={`${fieldName}-row`}
+                              value={locationDetails.row}
+                              onChange={(e) =>
+                                updateLocationDetails(
+                                  fieldName,
+                                  "row",
+                                  e.target.value
+                                )
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  // Find next bag size with quantity
+                                  const bagSizes =
+                                    adminInfo?.preferences?.bagSizes || [];
+                                  const currentBagIndex =
+                                    bagSizes.indexOf(bagSize);
+                                  const nextBagSize = bagSizes
+                                    .slice(currentBagIndex + 1)
+                                    .find((size) => {
+                                      const nextFieldName =
+                                        getBagSizeFieldName(size);
+                                      return (
+                                        parseInt(
+                                          formData.quantities[nextFieldName] ||
+                                            "0"
+                                        ) > 0
+                                      );
+                                    });
+
+                                  if (nextBagSize) {
+                                    const nextFieldName =
+                                      getBagSizeFieldName(nextBagSize);
+                                    const nextChamberInput =
+                                      document.querySelector(
+                                        `input[data-location-input="${nextFieldName}-chamber"]`
+                                      ) as HTMLButtonElement;
+                                    if (nextChamberInput) {
+                                      nextChamberInput.focus();
+                                      return;
+                                    }
+                                  }
+
+                                  // If no more bag sizes, focus remarks
+                                  const remarksTextarea =
+                                    document.querySelector(
+                                      "[data-remarks-textarea]"
+                                    ) as HTMLTextAreaElement;
+                                  if (remarksTextarea) remarksTextarea.focus();
+                                }
+                              }}
+                              className="w-full p-2 border border-border rounded-md bg-background focus:ring-2 focus:ring-primary focus:border-primary transition text-center"
+                              required
+                            />
+                          </div>
+                        </div>
+                        {formData.bagLocations[fieldName] && (
+                          <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
+                            Combined Location:{" "}
+                            <span className="font-medium">
+                              {formData.bagLocations[fieldName]}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
 
                   <div>
                     <label className="block text-sm font-medium mb-2">{t('incomingOrder.remarks.label')}</label>
                     <textarea
                       value={formData.remarks}
+                      data-remarks-textarea
                       onChange={(e) => updateFormData('remarks', e.target.value)}
                       placeholder={t('incomingOrder.remarks.placeholder')}
                       className="w-full p-3 border border-border rounded-md bg-background h-32 resize-none focus:ring-2 focus:ring-primary focus:border-primary transition"

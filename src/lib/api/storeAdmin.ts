@@ -126,6 +126,52 @@ interface UpdateIncomingOrderPayload {
   }[];
 }
 
+interface KapoorEditIncomingOrderPayload {
+  remarks: string;
+  dateOfEntry: string;
+  variety: string;
+  farmerAccount: string;
+  incomingBagSizes: {
+    size: string;
+    quantity: {
+      initialQuantity: number;
+      currentQuantity: number;
+    };
+    location: string;
+  }[];
+}
+
+interface KapoorEditIncomingOrderResponse {
+  status: string;
+  message: string;
+  data: {
+    voucher: {
+      type: string;
+      voucherNumber: number;
+    };
+    _id: string;
+    coldStorageId: string;
+    farmerAccount: string;
+    variety: string;
+    incomingBagSizes: {
+      size: string;
+      quantity: {
+        initialQuantity: number;
+        currentQuantity: number;
+      };
+      location: string;
+    }[];
+    dateOfEntry: string;
+    remarks: string;
+    currentStockAtThatTime: number;
+    createdBy: string;
+    createdAt: string;
+    updatedAt: string;
+    __v: number;
+    farmerCurrentStockAtThatTime: number;
+  };
+}
+
 interface UploadProfilePhotoResponse {
   status: string;
   data: {
@@ -972,6 +1018,31 @@ export const storeAdminApi = {
     const response = await axios.post<KapoorFarmerStockSummaryResponse>(
       `${BASE_URL}/api/store-admin/kapoor/farmer-stock-summary`,
       { farmerAccountIds },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+    return response.data;
+  },
+
+  /**
+   * Edits an incoming order for the Kapoor cold storage.
+   * @param orderId The ID of the incoming order to edit
+   * @param payload The updated order data
+   * @param token JWT Bearer token for authentication
+   * @returns Promise<KapoorEditIncomingOrderResponse>
+   */
+  kapoorEditIncomingOrder: async (
+    orderId: string,
+    payload: KapoorEditIncomingOrderPayload,
+    token: string
+  ): Promise<KapoorEditIncomingOrderResponse> => {
+    const response = await axios.put<KapoorEditIncomingOrderResponse>(
+      `${BASE_URL}/api/store-admin/kapoor/incoming-orders/${orderId}`,
+      payload,
       {
         headers: {
           "Content-Type": "application/json",
