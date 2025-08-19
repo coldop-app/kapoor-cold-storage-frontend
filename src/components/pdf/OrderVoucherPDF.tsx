@@ -232,14 +232,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     marginTop: 15,
     justifyContent: "space-between",
+    alignItems: "flex-start",
   },
   leftBottomSection: {
     flex: 1,
     marginRight: 20,
+    paddingTop: 0,
   },
   rightBottomSection: {
     width: 120,
     alignItems: "center",
+    paddingTop: 0,
   },
 
   // Total Bags Section
@@ -247,6 +250,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     marginBottom: 10,
     alignItems: "center",
+    minHeight: 40,
   },
   totalBagsLabel: {
     fontSize: 8,
@@ -289,6 +293,7 @@ const styles = StyleSheet.create({
   // Signature - simplified
   signatureContainer: {
     alignItems: "center",
+    justifyContent: "flex-start",
   },
   signatureBox: {
     width: 100,
@@ -298,6 +303,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
     alignItems: "center",
     paddingBottom: 4,
+    marginTop: 0,
   },
   signatureText: {
     fontSize: 8,
@@ -618,7 +624,7 @@ const OrderVoucherPDF: React.FC<OrderVoucherPDFProps> = ({
 
   return (
     <Document>
-      <Page size="A4" style={styles.page}>
+      <Page size={[595.28, 420.94]} style={styles.page}>
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerTop}>

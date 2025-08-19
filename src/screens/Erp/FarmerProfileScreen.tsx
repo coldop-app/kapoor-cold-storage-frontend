@@ -794,7 +794,11 @@ const FarmerProfileScreen = () => {
                           </span>
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-500">
-                          {new Date(item.createdAt).toLocaleDateString()}
+                          {new Date(item.createdAt).toLocaleDateString('en-GB', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric'
+                          }).replace(/\//g, '-')}
                         </td>
                         <td className="px-4 py-3 text-sm font-medium">
                           <span className={item.voucherType === 'RECEIPT' ? 'text-green-600' : 'text-red-600'}>

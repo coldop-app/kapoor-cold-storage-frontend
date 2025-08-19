@@ -167,7 +167,7 @@ const EditIncomingOrderFormContent = ({ order }: EditIncomingOrderFormContentPro
       bagLocationDetails,
       remarks: order.remarks || "",
       variety: orderDetail.variety,
-      dateOfEntry: new Date().toISOString().split('T')[0]
+      dateOfEntry: order.createdAt ? new Date(order.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
     };
   });
 
@@ -372,10 +372,11 @@ const EditIncomingOrderFormContent = ({ order }: EditIncomingOrderFormContentPro
                 <input
                   type="date"
                   value={formData.dateOfEntry || new Date().toISOString().split('T')[0]}
-                  onChange={(e) => updateFormData('dateOfEntry', e.target.value)}
-                  className="w-full p-3 border border-border rounded-md bg-background focus:ring-2 focus:ring-primary focus:border-primary transition"
+                  disabled
+                  className="w-full p-3 border border-border rounded-md bg-muted text-muted-foreground cursor-not-allowed"
                   required
                 />
+                <p className="text-xs text-muted-foreground mt-1">This date cannot be modified</p>
               </div>
 
               {/* Variety Selection */}
