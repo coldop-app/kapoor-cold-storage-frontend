@@ -38,7 +38,7 @@ const HomeScreen = () => {
         userAgent.includes('android') && userAgent.includes('version/') ||
         userAgent.includes('iphone') && !userAgent.includes('safari') ||
         userAgent.includes('ipad') && !userAgent.includes('safari') ||
-        (window.navigator as any).standalone === true ||
+        ('standalone' in window.navigator && (window.navigator as Navigator & { standalone?: boolean }).standalone === true) ||
         window.location.search.includes('webview=true') ||
         window.location.search.includes('app=true');
       

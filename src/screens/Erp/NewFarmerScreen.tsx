@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useSelector } from "react-redux";
 
 import toast from "react-hot-toast";
+import { AxiosError } from "axios";
 import { storeAdminApi } from "@/lib/api/storeAdmin";
 import { RootState } from "@/store";
 import { StoreAdmin } from "@/utils/types";
@@ -137,9 +138,12 @@ const NewFarmerScreen: React.FC = () => {
 
       toast.success('Farmer created successfully!');
       navigate('/erp/incoming-order'); // Navigate to incoming orders screen
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error creating farmer:", error);
-      toast.error(error.response?.data?.message || 'Failed to create farmer');
+      const errorMessage = error instanceof AxiosError 
+        ? error.response?.data?.message || 'Failed to create farmer'
+        : 'Failed to create farmer';
+      toast.error(errorMessage);
     }
   };
 
