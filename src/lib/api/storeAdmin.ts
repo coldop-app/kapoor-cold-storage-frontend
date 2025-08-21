@@ -609,7 +609,7 @@ export const storeAdminApi = {
   },
 
   searchFarmers: async (
-    coldStorageId: string,
+    _coldStorageId: string,
     query: string,
     token: string
   ) => {

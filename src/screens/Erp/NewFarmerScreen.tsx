@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Loader2, HelpCircle, UserPlus, CheckCircle } from "lucide-react";
+import { ArrowLeft, HelpCircle, UserPlus, CheckCircle } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useSelector } from "react-redux";
-import { useTranslation } from "react-i18next";
+
 import toast from "react-hot-toast";
 import { storeAdminApi } from "@/lib/api/storeAdmin";
 import { RootState } from "@/store";
@@ -23,7 +23,6 @@ export interface NewFarmerFormData {
 }
 
 const NewFarmerScreen: React.FC = () => {
-  const { t } = useTranslation();
   const navigate = useNavigate();
   const { adminInfo } = useSelector((state: RootState) => state.auth) as { adminInfo: StoreAdmin | null };
 
