@@ -7,7 +7,7 @@ import { useSelector } from "react-redux";
 import { useTranslation } from "react-i18next";
 import { storeAdminApi } from "@/lib/api/storeAdmin";
 import { RootState } from "@/store";
-import { StoreAdmin, Order } from "@/utils/types";
+import { StoreAdmin } from "@/utils/types";
 import Loader from "@/components/common/Loader/Loader";
 import {
   Select,
@@ -104,8 +104,43 @@ interface KapoorEditIncomingOrderPayload {
   }[];
 }
 
+// Interface for the actual order structure we're receiving
+interface ActualOrder {
+  _id: string;
+  coldStorageId: string;
+  farmerId: {
+    _id: string;
+    name: string;
+    address: string;
+    mobileNumber: string;
+    farmerId: string;
+  };
+  voucher: {
+    type: 'RECEIPT' | 'DELIVERY';
+    voucherNumber: number;
+  };
+  dateOfSubmission?: string;
+  fulfilled?: boolean;
+  remarks: string;
+  currentStockAtThatTime: number;
+  orderDetails: Array<{
+    variety: string;
+    bagSizes: Array<{
+      size: string;
+      quantity: {
+        initialQuantity: number;
+        currentQuantity: number;
+      };
+    }>;
+    location: string;
+  }>;
+  createdAt: string;
+  updatedAt: string;
+  __v: number;
+}
+
 interface EditIncomingOrderFormContentProps {
-  order: Order;
+  order: ActualOrder;
 }
 
 const EditIncomingOrderFormContent = ({ order }: EditIncomingOrderFormContentProps) => {
@@ -114,59 +149,121 @@ const EditIncomingOrderFormContent = ({ order }: EditIncomingOrderFormContentPro
   const { adminInfo } = useSelector((state: RootState) => state.auth) as { adminInfo: StoreAdmin | null };
   const [currentStep, setCurrentStep] = useState(1);
 
+  console.log("order is: ", order);
   // Initialize form data from order
   const [formData, setFormData] = useState<FormData>(() => {
-    const orderDetail = order.orderDetails[0]; // Assuming single order detail for now
+    console.log('Order received:', order);
+
+    // Check if this is an incoming order (voucher type RECEIPT) or outgoing order (voucher type DELIVERY)
+    const isIncomingOrder = order.voucher?.type === 'RECEIPT';
+    console.log('Is incoming order (RECEIPT):', isIncomingOrder);
+
     const quantities: BagQuantities = {};
+    let variety = '';
+    let remarks = '';
 
-    console.log('Order details:', orderDetail);
-    console.log('Bag sizes from order:', orderDetail.bagSizes);
+    if (isIncomingOrder) {
+      // This is an incoming order - extract from orderDetails (multiple entries with different bag sizes)
+      console.log('Processing incoming order with order details:', order.orderDetails);
 
-    // Convert bag sizes to the format we need
-    orderDetail.bagSizes.forEach(bag => {
-      console.log('Processing bag:', bag);
-      if (bag.quantity) {
-        // Convert size to the correct format (e.g., 'cut-tok' to 'cutTok')
-        const normalizedSize = bag.size.toLowerCase().replace(/-/g, '');
-        const fieldName = normalizedSize.charAt(0).toLowerCase() +
-                         normalizedSize.slice(1).replace(/\b\w/g, c => c.toUpperCase());
-        console.log('Field name:', fieldName, 'Current quantity:', bag.quantity.currentQuantity);
-        quantities[fieldName] = bag.quantity.currentQuantity.toString();
+      // Combine all bag sizes from all order details
+      order.orderDetails?.forEach((orderDetail, detailIndex: number) => {
+        console.log(`Processing order detail ${detailIndex}:`, orderDetail);
+        if (orderDetail.bagSizes) {
+          orderDetail.bagSizes.forEach((bag, bagIndex: number) => {
+            console.log(`Processing bag ${bagIndex} from detail ${detailIndex}:`, bag);
+            if (bag.quantity) {
+              // Use the exact bag size name as it comes from the API - no transformation needed
+              const fieldName = bag.size;
+              console.log(`Field name used: "${fieldName}", Current quantity: ${bag.quantity.currentQuantity}`);
+              quantities[fieldName] = bag.quantity.currentQuantity.toString();
+            }
+          });
+        }
+      });
+
+      // Get variety from the first order detail (they should all be the same)
+      variety = order.orderDetails?.[0]?.variety || '';
+      remarks = order.remarks || '';
+      console.log('Extracted variety:', variety, 'remarks:', remarks);
+    } else {
+      // This is an outgoing order - extract from orderDetails
+      const orderDetail = order.orderDetails?.[0];
+      console.log('Processing outgoing order with order details:', orderDetail);
+
+      if (orderDetail?.bagSizes) {
+        orderDetail.bagSizes.forEach((bag) => {
+          console.log('Processing outgoing bag:', bag);
+          if (bag.quantity) {
+            // Use the exact bag size name as it comes from the API - no transformation needed
+            const fieldName = bag.size;
+            console.log('Field name:', fieldName, 'Current quantity:', bag.quantity.currentQuantity);
+            quantities[fieldName] = bag.quantity.currentQuantity.toString();
+          }
+        });
       }
-    });
+
+      variety = orderDetail?.variety || '';
+      remarks = order.remarks || '';
+    }
 
     console.log('Final quantities object:', quantities);
+    console.log('Admin preferences bag sizes:', adminInfo?.preferences?.bagSizes);
 
     // Parse existing location data if available
     const bagLocations: { [key: string]: string } = {};
     const bagLocationDetails: { [key: string]: { chamber: string; floor: string; row: string } } = {};
 
     // If the order has location data, parse it
-    if (orderDetail.location) {
-      const locationParts = orderDetail.location.split('-');
-      if (locationParts.length === 3) {
-        // Set the main location for all bag sizes
-        adminInfo?.preferences?.bagSizes?.forEach(bagSize => {
-          const fieldName = getBagSizeFieldName(bagSize);
-          bagLocations[fieldName] = orderDetail.location || "";
-          bagLocationDetails[fieldName] = {
-            chamber: locationParts[0] || "",
-            floor: locationParts[1] || "",
-            row: locationParts[2] || ""
-          };
-        });
+    if (isIncomingOrder && order.orderDetails) {
+      // For incoming orders, check each order detail for location
+      order.orderDetails.forEach((orderDetail) => {
+        if (orderDetail.bagSizes && orderDetail.location) {
+          orderDetail.bagSizes.forEach((bag) => {
+            const locationParts = orderDetail.location.split('-');
+            if (locationParts.length === 3) {
+              // Use the exact bag size name as it comes from the API - no transformation needed
+              const fieldName = bag.size;
+
+              bagLocations[fieldName] = orderDetail.location;
+              bagLocationDetails[fieldName] = {
+                chamber: locationParts[0] || "",
+                floor: locationParts[1] || "",
+                row: locationParts[2] || ""
+              };
+            }
+          });
+        }
+      });
+    } else if (!isIncomingOrder && order.orderDetails?.[0]?.location) {
+      // For outgoing orders, parse the location from orderDetails
+      const orderDetail = order.orderDetails[0];
+      if (orderDetail && orderDetail.location) {
+        const locationParts = orderDetail.location.split('-');
+        if (locationParts.length === 3) {
+          // Set the main location for all bag sizes
+          adminInfo?.preferences?.bagSizes?.forEach(bagSize => {
+            // Use the exact bag size name as it comes from admin preferences - no transformation needed
+            bagLocations[bagSize] = orderDetail.location || "";
+            bagLocationDetails[bagSize] = {
+              chamber: locationParts[0] || "",
+              floor: locationParts[1] || "",
+              row: locationParts[2] || ""
+            };
+          });
+        }
       }
     }
 
     return {
-      farmerName: order.farmerId.name,
-      farmerId: order.farmerId._id,
-      farmerAccount: order.farmerId._id, // Use farmer ID as account for now
+      farmerName: order.farmerId?.name || '',
+      farmerId: order.farmerId?._id || '',
+      farmerAccount: order.farmerId?._id || '',
       quantities,
       bagLocations,
       bagLocationDetails,
-      remarks: order.remarks || "",
-      variety: orderDetail.variety,
+      remarks,
+      variety,
       dateOfEntry: order.createdAt ? new Date(order.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
     };
   });
@@ -260,9 +357,8 @@ const EditIncomingOrderFormContent = ({ order }: EditIncomingOrderFormContentPro
         variety: formData.variety,
         farmerAccount: formData.farmerAccount,
         incomingBagSizes: adminInfo.preferences?.bagSizes?.map(bagSize => {
-          const fieldName = getBagSizeFieldName(bagSize);
-          const currentQuantity = parseInt(formData.quantities[fieldName] || "0");
-          const location = formData.bagLocations[fieldName] || "";
+          const currentQuantity = parseInt(formData.quantities[bagSize] || "0");
+          const location = formData.bagLocations[bagSize] || "";
           return {
             size: bagSize,
             quantity: {
@@ -271,7 +367,7 @@ const EditIncomingOrderFormContent = ({ order }: EditIncomingOrderFormContentPro
             },
             location: location
           };
-        }).filter(bagSize => bagSize.quantity.currentQuantity > 0) || []
+        }) || []
       };
 
       // Use the new Kapoor API
@@ -413,15 +509,17 @@ const EditIncomingOrderFormContent = ({ order }: EditIncomingOrderFormContentPro
               <div className="border border-green-200 rounded-lg p-4 bg-green-50/50">
                 <h3 className="text-lg font-medium mb-2">{t('incomingOrder.quantities.title')}</h3>
                 <div className="space-y-4">
+                  {/* Display ALL bag sizes from admin preferences, with quantities if they exist */}
                   {adminInfo?.preferences?.bagSizes?.map((bagSize) => {
-                    const fieldName = getBagSizeFieldName(bagSize);
+                    const quantityValue = formData.quantities[bagSize] || "";
+                    console.log(`Rendering form for bag size: "${bagSize}" -> value: "${quantityValue}"`);
                     return (
                       <div key={bagSize} className="flex items-center justify-between">
                         <label className="text-sm font-medium">{formatBagSizeLabel(bagSize)}</label>
                         <input
                           type="text"
-                          value={formData.quantities[fieldName] || ""}
-                          onChange={(e) => updateQuantity(fieldName, e.target.value)}
+                          value={quantityValue}
+                          onChange={(e) => updateQuantity(bagSize, e.target.value)}
                           placeholder="-"
                           className="w-32 p-2 border rounded-md bg-background text-center focus:ring-2 focus:ring-primary focus:border-primary transition"
                         />
@@ -464,12 +562,11 @@ const EditIncomingOrderFormContent = ({ order }: EditIncomingOrderFormContentPro
                 <div className="space-y-4">
                   {/* Bag Locations */}
                   {adminInfo?.preferences?.bagSizes?.map((bagSize) => {
-                    const fieldName = getBagSizeFieldName(bagSize);
                     const quantity = parseInt(
-                      formData.quantities[fieldName] || "0"
+                      formData.quantities[bagSize] || "0"
                     );
                     const locationDetails = formData.bagLocationDetails[
-                      fieldName
+                      bagSize
                     ] || { chamber: "", floor: "", row: "" };
 
                     // Only show location input if quantity > 0
@@ -479,7 +576,7 @@ const EditIncomingOrderFormContent = ({ order }: EditIncomingOrderFormContentPro
                       <div key={bagSize} className="space-y-3">
                         <label className="block text-sm font-medium">
                           {formatBagSizeLabel(bagSize)} -{" "}
-                          {formData.quantities[fieldName] || "0"} {t('bags')}
+                          {formData.quantities[bagSize] || "0"} {t('bags')}
                         </label>
                         <div className="grid grid-cols-3 gap-3">
                           <div>
@@ -488,11 +585,11 @@ const EditIncomingOrderFormContent = ({ order }: EditIncomingOrderFormContentPro
                             </label>
                             <input
                               type="text"
-                              data-location-input={`${fieldName}-chamber`}
+                              data-location-input={`${bagSize}-chamber`}
                               value={locationDetails.chamber}
                               onChange={(e) =>
                                 updateLocationDetails(
-                                  fieldName,
+                                  bagSize,
                                   "chamber",
                                   e.target.value
                                 )
@@ -501,7 +598,7 @@ const EditIncomingOrderFormContent = ({ order }: EditIncomingOrderFormContentPro
                                 if (e.key === "Enter") {
                                   e.preventDefault();
                                   const floorInput = document.querySelector(
-                                    `input[data-location-input="${fieldName}-floor"]`
+                                    `input[data-location-input="${bagSize}-floor"]`
                                   ) as HTMLInputElement;
                                   if (floorInput) floorInput.focus();
                                 }
@@ -516,11 +613,11 @@ const EditIncomingOrderFormContent = ({ order }: EditIncomingOrderFormContentPro
                             </label>
                             <input
                               type="text"
-                              data-location-input={`${fieldName}-floor`}
+                              data-location-input={`${bagSize}-floor`}
                               value={locationDetails.floor}
                               onChange={(e) =>
                                 updateLocationDetails(
-                                  fieldName,
+                                  bagSize,
                                   "floor",
                                   e.target.value
                                 )
@@ -529,9 +626,10 @@ const EditIncomingOrderFormContent = ({ order }: EditIncomingOrderFormContentPro
                                 if (e.key === "Enter") {
                                   e.preventDefault();
                                   const rowInput = document.querySelector(
-                                    `input[data-location-input="${fieldName}-row"]`
+                                    `input[data-location-input="${bagSize}-row"]`
                                   ) as HTMLInputElement;
                                   if (rowInput) rowInput.focus();
+                                  return;
                                 }
                               }}
                               className="w-full p-2 border border-border rounded-md bg-background focus:ring-2 focus:ring-primary focus:border-primary transition text-center"
@@ -544,11 +642,11 @@ const EditIncomingOrderFormContent = ({ order }: EditIncomingOrderFormContentPro
                             </label>
                             <input
                               type="text"
-                              data-location-input={`${fieldName}-row`}
+                              data-location-input={`${bagSize}-row`}
                               value={locationDetails.row}
                               onChange={(e) =>
                                 updateLocationDetails(
-                                  fieldName,
+                                  bagSize,
                                   "row",
                                   e.target.value
                                 )
@@ -557,29 +655,23 @@ const EditIncomingOrderFormContent = ({ order }: EditIncomingOrderFormContentPro
                                 if (e.key === "Enter") {
                                   e.preventDefault();
                                   // Find next bag size with quantity
-                                  const bagSizes =
-                                    adminInfo?.preferences?.bagSizes || [];
-                                  const currentBagIndex =
-                                    bagSizes.indexOf(bagSize);
+                                  const bagSizes = adminInfo?.preferences?.bagSizes || [];
+                                  const currentBagIndex = bagSizes.indexOf(bagSize);
                                   const nextBagSize = bagSizes
                                     .slice(currentBagIndex + 1)
                                     .find((size) => {
-                                      const nextFieldName =
-                                        getBagSizeFieldName(size);
                                       return (
                                         parseInt(
-                                          formData.quantities[nextFieldName] ||
+                                          formData.quantities[size] ||
                                             "0"
                                         ) > 0
                                       );
                                     });
 
                                   if (nextBagSize) {
-                                    const nextFieldName =
-                                      getBagSizeFieldName(nextBagSize);
                                     const nextChamberInput =
                                       document.querySelector(
-                                        `input[data-location-input="${nextFieldName}-chamber"]`
+                                        `input[data-location-input="${nextBagSize}-chamber"]`
                                       ) as HTMLButtonElement;
                                     if (nextChamberInput) {
                                       nextChamberInput.focus();
@@ -600,11 +692,11 @@ const EditIncomingOrderFormContent = ({ order }: EditIncomingOrderFormContentPro
                             />
                           </div>
                         </div>
-                        {formData.bagLocations[fieldName] && (
+                        {formData.bagLocations[bagSize] && (
                           <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
                             Combined Location:{" "}
                             <span className="font-medium">
-                              {formData.bagLocations[fieldName]}
+                              {formData.bagLocations[bagSize]}
                             </span>
                           </div>
                         )}
