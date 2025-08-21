@@ -14,10 +14,28 @@ import DeliveryVoucherCard from '@/components/vouchers/DeliveryVoucherCard';
 import type { KapoorSingleFarmerAllOrdersResponse } from '@/lib/api/storeAdmin';
 import { useMemo, useState } from 'react';
 import { StoreAdmin, Order } from '@/utils/types';
-import { PDFViewer } from '@react-pdf/renderer';
+import { PDFViewer, pdf } from '@react-pdf/renderer';
 import FarmerReportPDF from '@/components/pdf/FarmerReportPDF';
 import * as ReactDOM from 'react-dom/client';
 import FarmerStockSummaryTable from '@/components/common/FarmerStockSummaryTable';
+
+// WebView message interfaces
+interface WebViewPDFMessage {
+  type: "OPEN_PDF_NATIVE";
+  title: string;
+  fileName: string;
+  pdfData: string; // base64 encoded PDF
+}
+
+interface ReactNativeWebViewType {
+  postMessage(message: string): void;
+}
+
+declare global {
+  interface Window {
+    ReactNativeWebView?: ReactNativeWebViewType;
+  }
+}
 
 interface Farmer {
   _id: string;
@@ -72,6 +90,11 @@ const FarmerProfileScreen = () => {
   const farmer = location.state?.farmer as Farmer;
   const adminInfo = useSelector((state: RootState) => state.auth.adminInfo);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+
+  // WebView detection function
+  const isWebView = () => {
+    return window.ReactNativeWebView !== undefined;
+  };
 
   // Add new state variables for search, filter, and sorting
   const [searchReceiptNumber, setSearchReceiptNumber] = useState<string>("");
@@ -274,37 +297,86 @@ const FarmerProfileScreen = () => {
       });
       console.log('=== END FARMER REPORT PDF DATA ===');
 
-      // Open PDF in new window
-      const printWindow = window.open('', '_blank');
-      if (printWindow) {
-        printWindow.document.write(`
-          <html>
-            <body>
-              <div id="root" style="height: 100vh;"></div>
-              <script>
-                window.onbeforeunload = null;
-              </script>
-            </body>
-          </html>
-        `);
+      if (isWebView()) {
+        // Handle WebView - generate PDF and send to React Native
+        console.log("Starting PDF generation for Farmer Report in WebView...");
 
-        const root = printWindow.document.getElementById('root');
-        if (root) {
-          ReactDOM.createRoot(root).render(
-            <PDFViewer width="100%" height="100%">
-              <FarmerReportPDF
-                farmer={farmer}
-                adminInfo={adminInfo}
-                orders={ordersForPDF}
-              />
-            </PDFViewer>
-          );
+        const pdfDoc = (
+          <FarmerReportPDF
+            farmer={farmer}
+            adminInfo={adminInfo}
+            orders={ordersForPDF}
+          />
+        );
+
+        // Generate PDF as blob
+        const pdfBlob = await pdf(pdfDoc).toBlob();
+        console.log("PDF blob generated, size:", pdfBlob.size, "bytes");
+
+        // Convert blob to base64
+        const reader = new FileReader();
+        reader.onload = function () {
+          const base64Data = (reader.result as string).split(",")[1]; // Remove data:application/pdf;base64, prefix
+
+          const fileName = `Farmer_Report_${farmer.farmerId}_${
+            new Date().toISOString().split("T")[0]
+          }.pdf`;
+
+          const message: WebViewPDFMessage = {
+            type: "OPEN_PDF_NATIVE",
+            title: `Farmer Report - ${farmer.name}`,
+            fileName: fileName,
+            pdfData: base64Data,
+          };
+
+          window.ReactNativeWebView?.postMessage(JSON.stringify(message));
+          console.log("PDF data sent to React Native");
+
+          // Reset loading state after successful send
+          setIsGeneratingPDF(false);
+        };
+
+        reader.onerror = function () {
+          console.error("Error converting PDF to base64");
+          alert("Error preparing PDF for native viewer. Please try again.");
+          // Reset loading state on error
+          setIsGeneratingPDF(false);
+        };
+
+        reader.readAsDataURL(pdfBlob);
+      } else {
+        // Handle web browser - open PDF in new window
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+          printWindow.document.write(`
+            <html>
+              <body>
+                <div id="root" style="height: 100vh;"></div>
+                <script>
+                  window.onbeforeunload = null;
+                </script>
+              </body>
+            </html>
+          `);
+
+          const root = printWindow.document.getElementById('root');
+          if (root) {
+            ReactDOM.createRoot(root).render(
+              <PDFViewer width="100%" height="100%">
+                <FarmerReportPDF
+                  farmer={farmer}
+                  adminInfo={adminInfo}
+                  orders={ordersForPDF}
+                />
+              </PDFViewer>
+            );
+          }
         }
+        setIsGeneratingPDF(false);
       }
     } catch (error) {
       console.error('Error generating farmer report:', error);
       alert('Failed to generate report. Please try again.');
-    } finally {
       setIsGeneratingPDF(false);
     }
   };
@@ -368,37 +440,86 @@ const FarmerProfileScreen = () => {
       });
       console.log(`=== END VARIETY REPORT PDF DATA FOR ${variety} ===`);
 
-      // Open PDF in new window
-      const printWindow = window.open('', '_blank');
-      if (printWindow) {
-        printWindow.document.write(`
-          <html>
-            <body>
-              <div id="root" style="height: 100vh;"></div>
-              <script>
-                window.onbeforeunload = null;
-              </script>
-            </body>
-          </html>
-        `);
+      if (isWebView()) {
+        // Handle WebView - generate PDF and send to React Native
+        console.log(`Starting PDF generation for Variety Report (${variety}) in WebView...`);
 
-        const root = printWindow.document.getElementById('root');
-        if (root) {
-          ReactDOM.createRoot(root).render(
-            <PDFViewer width="100%" height="100%">
-              <FarmerReportPDF
-                farmer={farmer}
-                adminInfo={adminInfo}
-                orders={ordersForPDF}
-              />
-            </PDFViewer>
-          );
+        const pdfDoc = (
+          <FarmerReportPDF
+            farmer={farmer}
+            adminInfo={adminInfo}
+            orders={ordersForPDF}
+          />
+        );
+
+        // Generate PDF as blob
+        const pdfBlob = await pdf(pdfDoc).toBlob();
+        console.log("PDF blob generated, size:", pdfBlob.size, "bytes");
+
+        // Convert blob to base64
+        const reader = new FileReader();
+        reader.onload = function () {
+          const base64Data = (reader.result as string).split(",")[1]; // Remove data:application/pdf;base64, prefix
+
+          const fileName = `Variety_Report_${variety}_${farmer.farmerId}_${
+            new Date().toISOString().split("T")[0]
+          }.pdf`;
+
+          const message: WebViewPDFMessage = {
+            type: "OPEN_PDF_NATIVE",
+            title: `${variety} Report - ${farmer.name}`,
+            fileName: fileName,
+            pdfData: base64Data,
+          };
+
+          window.ReactNativeWebView?.postMessage(JSON.stringify(message));
+          console.log("PDF data sent to React Native");
+
+          // Reset loading state after successful send
+          setIsGeneratingPDF(false);
+        };
+
+        reader.onerror = function () {
+          console.error("Error converting PDF to base64");
+          alert("Error preparing PDF for native viewer. Please try again.");
+          // Reset loading state on error
+          setIsGeneratingPDF(false);
+        };
+
+        reader.readAsDataURL(pdfBlob);
+      } else {
+        // Handle web browser - open PDF in new window
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+          printWindow.document.write(`
+            <html>
+              <body>
+                <div id="root" style="height: 100vh;"></div>
+                <script>
+                  window.onbeforeunload = null;
+                </script>
+              </body>
+            </html>
+          `);
+
+          const root = printWindow.document.getElementById('root');
+          if (root) {
+            ReactDOM.createRoot(root).render(
+              <PDFViewer width="100%" height="100%">
+                <FarmerReportPDF
+                  farmer={farmer}
+                  adminInfo={adminInfo}
+                  orders={ordersForPDF}
+                />
+              </PDFViewer>
+            );
+          }
         }
+        setIsGeneratingPDF(false);
       }
     } catch (error) {
       console.error('Error generating variety report:', error);
       alert('Failed to generate report. Please try again.');
-    } finally {
       setIsGeneratingPDF(false);
     }
   };
