@@ -532,7 +532,7 @@ export const storeAdminApi = {
 
   searchReceipt: async (params: SearchReceiptParams, token: string) => {
     const response = await axios.post(
-      `${BASE_URL}/api/store-admin/daybook/search-receipt`,
+      `${BASE_URL}/api/store-admin/kapoor/search-by-receipt`,
       params,
       {
         headers: {

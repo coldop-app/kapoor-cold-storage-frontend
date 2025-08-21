@@ -331,3 +331,12 @@ export interface KapoorFarmerStockSummaryResponse {
     [farmerAccountId: string]: KapoorFarmerStockSummaryVariety[];
   };
 }
+
+// Interface for search by receipt response
+export interface SearchResponse {
+  status: string;
+  data: {
+    incoming: KapoorDaybookOrderData[];
+    outgoing: KapoorDaybookOrderData[];
+  };
+}

@@ -18,19 +18,12 @@ import {
   Order,
   KapoorDaybookOrderData,
   KapoorDaybookOrdersResponse,
+  SearchResponse,
 } from "@/utils/types";
 import { useTranslation } from "react-i18next";
 
 type OrderType = "all" | "incoming" | "outgoing";
 type SortOrder = "latest" | "oldest";
-
-interface SearchResponse {
-  status: string;
-  data: {
-    incoming: Order[];
-    outgoing: Order[];
-  };
-}
 
 const DaybookScreen = () => {
   const { t } = useTranslation();
