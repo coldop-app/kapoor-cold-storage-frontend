@@ -90,6 +90,7 @@ const FarmerProfileScreen = () => {
   const farmer = location.state?.farmer as Farmer;
   const adminInfo = useSelector((state: RootState) => state.auth.adminInfo);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [varietyGeneratingPDF, setVarietyGeneratingPDF] = useState<Record<string, boolean>>({});
 
   // WebView detection function
   const isWebView = () => {
@@ -388,7 +389,7 @@ const FarmerProfileScreen = () => {
       return;
     }
 
-    setIsGeneratingPDF(true);
+    setVarietyGeneratingPDF(prev => ({ ...prev, [variety]: true }));
 
     try {
       // Filter orders by variety and convert to the format expected by FarmerReportPDF
@@ -476,14 +477,14 @@ const FarmerProfileScreen = () => {
           console.log("PDF data sent to React Native");
 
           // Reset loading state after successful send
-          setIsGeneratingPDF(false);
+          setVarietyGeneratingPDF(prev => ({ ...prev, [variety]: false }));
         };
 
         reader.onerror = function () {
           console.error("Error converting PDF to base64");
           alert("Error preparing PDF for native viewer. Please try again.");
           // Reset loading state on error
-          setIsGeneratingPDF(false);
+          setVarietyGeneratingPDF(prev => ({ ...prev, [variety]: false }));
         };
 
         reader.readAsDataURL(pdfBlob);
@@ -515,12 +516,12 @@ const FarmerProfileScreen = () => {
             );
           }
         }
-        setIsGeneratingPDF(false);
+        setVarietyGeneratingPDF(prev => ({ ...prev, [variety]: false }));
       }
     } catch (error) {
       console.error('Error generating variety report:', error);
       alert('Failed to generate report. Please try again.');
-      setIsGeneratingPDF(false);
+      setVarietyGeneratingPDF(prev => ({ ...prev, [variety]: false }));
     }
   };
 
@@ -838,11 +839,11 @@ const FarmerProfileScreen = () => {
                         size="sm"
                         className="w-full bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 hover:text-gray-900 shadow-sm hover:shadow-md transition-all duration-200 text-xs font-medium inline-flex items-center justify-center gap-2"
                         onClick={() => handleViewVarietyReport(account.variety)}
-                        disabled={isGeneratingPDF || !ordersData?.data || !adminInfo || !isStoreAdmin(adminInfo)}
+                        disabled={varietyGeneratingPDF[account.variety] || !ordersData?.data || !adminInfo || !isStoreAdmin(adminInfo)}
                       >
                         <FileText className="h-3 w-3 text-primary" />
                         <span className="truncate">
-                          {isGeneratingPDF ? 'Generating...' : 'View Report'}
+                          {varietyGeneratingPDF[account.variety] ? 'Generating...' : 'View Report'}
                         </span>
                       </Button>
                     </div>
