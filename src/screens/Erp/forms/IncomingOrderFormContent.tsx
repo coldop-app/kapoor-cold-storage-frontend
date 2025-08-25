@@ -219,8 +219,8 @@ const IncomingOrderFormContent = () => {
     }
   }, [farmer]);
   const updateFormData = (field: string, value: string) => {
-    // For variety and account fields, preserve spaces; for others, remove spaces
-    if (field === 'variety' || field === 'farmerAccount') {
+    // For variety, account, and remarks fields, preserve spaces; for others, remove spaces
+    if (field === 'variety' || field === 'farmerAccount' || field === 'remarks') {
       setFormData((prev) => ({ ...prev, [field]: value }));
     } else {
       // Remove spaces from other fields

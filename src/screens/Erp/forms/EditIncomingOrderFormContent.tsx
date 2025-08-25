@@ -351,12 +351,9 @@ const EditIncomingOrderFormContent = ({ order }: EditIncomingOrderFormContentPro
         throw new Error("No authentication token found");
       }
 
-      const payload: KapoorEditIncomingOrderPayload = {
-        remarks: formData.remarks,
-        dateOfEntry: formData.dateOfEntry,
-        variety: formData.variety,
-        farmerAccount: formData.farmerAccount,
-        incomingBagSizes: adminInfo.preferences?.bagSizes?.map(bagSize => {
+      // Filter out bag sizes with zero quantities and ensure all have valid locations
+      const incomingBagSizes = adminInfo.preferences?.bagSizes
+        ?.map(bagSize => {
           const currentQuantity = parseInt(formData.quantities[bagSize] || "0");
           const location = formData.bagLocations[bagSize] || "";
           return {
@@ -367,7 +364,15 @@ const EditIncomingOrderFormContent = ({ order }: EditIncomingOrderFormContentPro
             },
             location: location
           };
-        }) || []
+        })
+        .filter(bagSize => bagSize.quantity.currentQuantity > 0 && bagSize.location.trim() !== "") || [];
+
+      const payload: KapoorEditIncomingOrderPayload = {
+        remarks: formData.remarks,
+        dateOfEntry: formData.dateOfEntry,
+        variety: formData.variety,
+        farmerAccount: formData.farmerAccount,
+        incomingBagSizes
       };
 
       // Use the new Kapoor API
@@ -413,7 +418,19 @@ const EditIncomingOrderFormContent = ({ order }: EditIncomingOrderFormContentPro
 
   return (
     <div className="max-w-2xl mx-auto p-6 bg-background rounded-lg shadow-lg border border-border">
-      <h1 className="text-2xl font-bold text-center mb-6">{t('editIncomingOrder.title')}</h1>
+      <div className="text-center mb-6">
+        <h1 className="text-2xl font-bold mb-3">{t('editIncomingOrder.title')}</h1>
+
+        {/* Receipt Number Display - centered with primary color highlight */}
+        <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 border border-primary/20 rounded-full shadow-sm">
+          <span className="text-xs font-medium text-primary uppercase tracking-wide">
+            {t("voucher no:")}
+          </span>
+          <span className="text-sm font-bold text-primary">
+            #{order.voucher?.voucherNumber || 'N/A'}
+          </span>
+        </div>
+      </div>
 
       {/* Progress indicator */}
       <div className="mb-8">
@@ -457,7 +474,7 @@ const EditIncomingOrderFormContent = ({ order }: EditIncomingOrderFormContentPro
               {/* Farmer Details (Read-only) */}
               <div className="border border-green-200 rounded-lg p-4 bg-green-50/50">
                 <h3 className="text-lg font-medium mb-2">{t('editIncomingOrder.farmerDetails')}</h3>
-                <div className="text-sm text-gray-600">
+                <div className="text-sm text-gray-600 space-y-2">
                   <p className="font-medium text-gray-900">{formData.farmerName}</p>
                 </div>
               </div>
@@ -711,7 +728,8 @@ const EditIncomingOrderFormContent = ({ order }: EditIncomingOrderFormContentPro
                       data-remarks-textarea
                       onChange={(e) => updateFormData('remarks', e.target.value)}
                       placeholder={t('incomingOrder.remarks.placeholder')}
-                      className="w-full p-3 border border-border rounded-md bg-background h-32 resize-none focus:ring-2 focus:ring-primary focus:border-primary transition"
+                      className="w-full p-3 border border-border rounded-md bg-background h-32 resize-none focus:ring-2 focus:ring-primary focus:border-primary transition whitespace-pre-wrap"
+                      style={{ whiteSpace: 'pre-wrap' }}
                       rows={4}
                     />
                   </div>
