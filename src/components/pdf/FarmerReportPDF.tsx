@@ -30,6 +30,7 @@ const styles = StyleSheet.create({
     flexDirection: "column",
     backgroundColor: "#FEFDF8",
     padding: 16,
+    paddingBottom: 80, // Add extra bottom padding to ensure space for footer
     fontFamily: "Helvetica",
     fontSize: 8,
   },
@@ -97,6 +98,13 @@ const styles = StyleSheet.create({
   table: {
     borderWidth: 1,
     borderColor: "#000",
+  },
+  logoSection: {
+    width: 50,
+    marginRight: 12,
+    position: "absolute",
+    left: 0,
+    top: 0,
   },
   tableHeader: {
     flexDirection: "row",
@@ -260,10 +268,7 @@ const styles = StyleSheet.create({
   },
 
   footer: {
-    position: "absolute",
-    bottom: 16,
-    left: 16,
-    right: 16,
+    marginTop: 20,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
@@ -300,11 +305,10 @@ const styles = StyleSheet.create({
   },
 
   pageNumber: {
-    position: "absolute",
-    bottom: 6,
-    right: 16,
     fontSize: 7,
     color: "#666",
+    textAlign: "center",
+    marginTop: 8,
   },
 });
 
@@ -382,11 +386,19 @@ const FarmerReportPDF: React.FC<FarmerReportPDFProps> = ({
   adminInfo,
   orders,
 }) => {
+  console.log("adminInfo", adminInfo);
   if (!orders || orders.length === 0) {
     return (
       <Document>
         <Page size="A4" style={styles.page}>
           <View style={styles.header}>
+          <View style={styles.logoSection}>
+              {adminInfo.imageUrl ? (
+                <Image style={styles.logo} src={adminInfo.imageUrl} />
+              ) : (
+                <View style={[styles.logo, { backgroundColor: "#f0f0f0" }]} />
+              )}
+            </View>
             <Text style={styles.companyName}>
               {adminInfo.coldStorageDetails.coldStorageName.toUpperCase()}
             </Text>
